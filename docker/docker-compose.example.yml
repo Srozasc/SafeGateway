@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # ===============================================================
+  # API Gateway Standalone
+  # ===============================================================
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: gateway-http:latest
+    container_name: gateway-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - CONFIG_PATH=/app/config/gateway.yaml
+      - REDIS_URL=redis://redis-cache:6379
+      - LOG_LEVEL=info
+    volumes:
+      # Montar la configuración declarativa en modo de solo lectura (ro)
+      - ./gateway.yaml:/app/config/gateway.yaml:ro
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - gateway-network
+
+  # ===============================================================
+  # Redis - Caché distribuido y almacenamiento de Rate Limiting
+  # ===============================================================
+  redis-cache:
+    image: redis:7-alpine
+    container_name: gateway-redis
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - gateway-network
+
+  # ===============================================================
+  # Microservicio Mock de ejemplo para probar el Gateway
+  # ===============================================================
+  mock-backend:
+    image: node:20-alpine
+    container_name: mock-service
+    expose:
+      - "8080"
+    command: >
+      node -e "
+      const http = require('http');
+      const server = http.createServer((req, res) => {
+        console.log(`Petición recibida en Backend Mock: $${req.method} $${req.url}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'success',
+          message: '¡Hola desde el Backend Mock Autocontenido!',
+          timestamp: new Date().toISOString(),
+          requestedPath: req.url,
+          headers: req.headers
+        }));
+      });
+      server.listen(8080, '0.0.0.0', () => {
+        console.log('Backend Mock escuchando en http://0.0.0.0:8080');
+      });
+      "
+    networks:
+      - gateway-network
+
+networks:
+  gateway-network:
+    driver: bridge

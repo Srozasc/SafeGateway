@@ -1,0 +1,49 @@
+# Configuración Declarativa de Ejemplo para el Gateway HTTP Modular
+
+# Configuración del servidor Fastify interno del Gateway
+server:
+  port: 3000
+  host: "0.0.0.0"
+
+# Configuración de Redis para el Rate Limiting
+redis:
+  # Soporta interpolación de variables de entorno con la sintaxis ${NOM_VAR}
+  url: "${REDIS_URL}"
+  # Comportamiento si Redis falla: "open" (deja pasar peticiones) o "closed" (bloquea con 503)
+  onFailure: "open"
+
+# Configuración del logger pino integrado
+logging:
+  # Niveles de log: debug | info | warn | error
+  level: "info"
+
+# Rutas estándar del Gateway (Reverse Proxy con prefijos y patrones)
+routes:
+  # Rutas de API general
+  - prefix: "/api"
+    target: "http://localhost:8080"
+    stripPrefix: false # Mantiene /api al redirigir al backend
+    # Configuración de Rate Limit por IP para este grupo de rutas
+    rateLimit:
+      maxRequests: 1000
+      windowSeconds: 60
+    # Timeouts opcionales para este backend (en milisegundos)
+    timeout:
+      connect: 5000
+      response: 30000
+
+  # Rutas de administración
+  - prefix: "/admin"
+    target: "http://localhost:9090"
+    stripPrefix: true # Remueve /admin antes de enviar la petición al backend (ej: /admin/users -> /users)
+    rateLimit:
+      maxRequests: 100
+      windowSeconds: 60
+
+# Rutas con prioridad que sobreescriben la política general de las rutas estándar
+overrides:
+  # Ejemplo: Límite muy estricto para el login de autenticación para evitar ataques de fuerza bruta
+  - path: "/api/login"
+    rateLimit:
+      maxRequests: 5
+      windowSeconds: 60

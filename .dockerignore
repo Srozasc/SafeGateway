@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+tests/
+.git/
+.vscode/
+.env
+.env.example
+*.md
+jest.config.ts
+docker/docker-compose.example.yml
