@@ -288,6 +288,55 @@ pnpm docker:build
 
 ---
 
+## 📊 Observabilidad y Tooling de Desarrollo (Dozzle & JSON Schema)
+
+El Gateway incluye un stack de desarrollo optimizado para facilitar el diagnóstico, monitoreo y configuración local sin sobrecargar los componentes en producción.
+
+### 1. Visualización de Logs en Tiempo Real (Dozzle)
+
+**Dozzle** es un visualizador de logs interactivo y ultra-ligero (consume menos de 10 MB de RAM) que se conecta al socket de Docker y expone una interfaz web moderna para monitorear los contenedores.
+
+* **Cómo arrancar**: Levanta el stack de desarrollo completo mediante:
+  ```bash
+  docker compose -f docker/docker-compose.example.yml up -d
+  ```
+* **Acceso**: Abre en tu navegador [http://localhost:9999](http://localhost:9999).
+* **Características**:
+  * Visualización en tiempo real de los logs estructurados (JSON de Pino).
+  * Búsqueda por texto (ej. filtra por "Rate limit" o errores "429").
+  * Monitoreo conjunto de `gateway-service`, `gateway-redis` y `mock-service`.
+  * Socket de Docker montado de forma segura en modo **solo lectura (`ro`)**.
+
+---
+
+### 2. Autocompletado y Validación de Configuración (JSON Schema)
+
+Para evitar errores humanos y agilizar la edición del archivo `gateway.yaml`, el proyecto incluye un **JSON Schema** que proporciona ayuda interactiva directamente en el editor.
+
+#### Requisitos
+1. Utilizar **Visual Studio Code**.
+2. Instalar la extensión oficial **YAML** de Red Hat (`redhat.vscode-yaml`).
+
+#### Características integradas:
+* **Autocompletado Inteligente (`Ctrl+Espacio`)**: Sugerencias en tiempo real al definir propiedades clave como `server`, `redis`, `logging`, `routes` u `overrides`.
+* **Validación de Tipos y Formatos**: VS Code marcará en rojo configuraciones erróneas (ej. puertos fuera de rango `1-65535`, URL de Redis que no empiece con `redis://` o un array `routes` vacío).
+* **Soporte para Interpolación**: La validación es totalmente compatible con la sintaxis de variables de entorno `${ENV_VAR}` en cualquier propiedad escalar (ej. `port: ${PORT}`).
+* **Tooltips en Español**: Hover explicativo sobre cualquier propiedad detallando su propósito, valores por defecto y ejemplos de uso en español.
+
+#### Estructura de Asociación
+El archivo `.vscode/settings.json` mapea automáticamente el esquema `config/gateway-schema.json` a los siguientes archivos:
+* `config/gateway.yaml`
+* `config/gateway.example.yaml`
+* `docker/gateway.yaml`
+
+#### 🔄 Mantenimiento y Regeneración del Schema
+Si el esquema de configuración Zod en `src/config/schema.ts` se modifica (por ejemplo, al añadir un nuevo middleware o una nueva propiedad al servidor), el JSON Schema en `config/gateway-schema.json` debe actualizarse correspondientemente para mantener la coherencia.
+Para actualizarlo:
+1. Modifica la estructura en `src/config/schema.ts`.
+2. Replica de forma correspondiente las propiedades, tipos y descripciones en `config/gateway-schema.json`.
+
+---
+
 ## 🔒 Seguridad e Integridad de Datos
 
 * **Ocultación de Errores Internos**: El manejador de errores global intercepta cualquier error crítico en producción (estados `5xx`) y retorna una estructura JSON limpia sin exponer trazas de pila (*stack traces*), dependencias caídas, IPs o puertos de backends internos.
@@ -298,3 +347,4 @@ pnpm docker:build
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia **MIT**. Consulte el archivo `LICENSE` para obtener más información.
+

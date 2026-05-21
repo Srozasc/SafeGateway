@@ -1,0 +1,252 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "gateway-config",
+  "title": "Configuración del API Gateway",
+  "description": "Esquema de validación para el archivo gateway.yaml del API Gateway HTTP Modular.",
+  "type": "object",
+  "required": ["redis", "routes"],
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "description": "Configuración del servidor Fastify Core del Gateway.",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Puerto TCP en el que escuchará el servidor HTTP del Gateway."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": 3000
+        },
+        "host": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Dirección IP de escucha. Usar '0.0.0.0' para aceptar conexiones de cualquier interfaz de red."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "0.0.0.0"
+        }
+      },
+      "default": {
+        "port": 3000,
+        "host": "0.0.0.0"
+      }
+    },
+    "redis": {
+      "type": "object",
+      "description": "Configuración del cliente y comportamiento de conexión a Redis.",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^rediss?://",
+              "description": "URL de conexión a Redis. Debe comenzar con 'redis://' o 'rediss://' (TLS)."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
+        "onFailure": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["open", "closed"],
+              "description": "Comportamiento cuando Redis no está disponible. 'open' = permitir tráfico sin rate-limiting (fail-open). 'closed' = bloquear tráfico con error 503 (fail-closed)."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "open"
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "description": "Configuración del sistema de logs estructurados con Pino.",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["debug", "info", "warn", "error"],
+              "description": "Nivel mínimo de logging. Los eventos con severidad menor a la configurada serán descartados."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "info"
+        }
+      },
+      "default": {
+        "level": "info"
+      }
+    },
+    "routes": {
+      "type": "array",
+      "description": "Lista de rutas declarativas que el Gateway intercepta y reenvía a backends.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["prefix", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Prefijo de la ruta que el Gateway interceptará. Debe comenzar con '/' (por ejemplo, '/api')."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^https?://",
+                "description": "URL del backend destino al que se reenviará el tráfico. Debe comenzar con http:// o https://."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
+          },
+          "stripPrefix": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Si es true, elimina el prefijo de la ruta antes de reenviar la petición al backend. Por ejemplo, si el prefijo es '/api' y stripPrefix es true, '/api/users' se convierte en '/users' al reenviarse."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ],
+            "default": false
+          },
+          "rateLimit": {
+            "$ref": "#/definitions/rateLimitConfig"
+          },
+          "timeout": {
+            "type": "object",
+            "description": "Configuración de timeouts específicos para esta ruta.",
+            "additionalProperties": false,
+            "properties": {
+              "connect": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Tiempo de espera máximo (en milisegundos) para establecer la conexión TCP con el backend."
+                  },
+                  {
+                    "$ref": "#/definitions/envVar"
+                  }
+                ]
+              },
+              "response": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Tiempo de espera máximo (en milisegundos) para recibir la primera respuesta desde el backend."
+                  },
+                  {
+                    "$ref": "#/definitions/envVar"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "description": "Lista de excepciones de rate limit para paths específicos que sobreescriben las reglas de las rutas padre.",
+      "items": {
+        "type": "object",
+        "required": ["path", "rateLimit"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Path exacto al que se le aplicará el rate-limit específico (por ejemplo, '/api/login'). Debe comenzar con '/'."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
+          },
+          "rateLimit": {
+            "$ref": "#/definitions/rateLimitConfig"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "envVar": {
+      "type": "string",
+      "pattern": "^\\$\\{[a-zA-Z_][a-zA-Z0-9_]*\\}$",
+      "description": "Referencia a una variable de entorno para interpolación dinámica, por ejemplo: ${REDIS_URL}."
+    },
+    "rateLimitConfig": {
+      "type": "object",
+      "description": "Configuración de límite de peticiones (Rate Limiting).",
+      "required": ["maxRequests", "windowSeconds"],
+      "additionalProperties": false,
+      "properties": {
+        "maxRequests": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Número máximo de peticiones permitidas desde la misma IP dentro de la ventana de tiempo especificada."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
+        "windowSeconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Duración de la ventana de tiempo (en segundos) en la que se reinicia el conteo de peticiones."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

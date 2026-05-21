@@ -73,6 +73,21 @@ services:
     networks:
       - gateway-network
 
+  # ===============================================================
+  # Visualizador de Logs en Tiempo Real (Dozzle)
+  # ===============================================================
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: gateway-logs
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_NO_ANALYTICS=true
+    networks:
+      - gateway-network
+
 networks:
   gateway-network:
     driver: bridge

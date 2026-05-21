@@ -3,19 +3,19 @@
   host: 0.0.0.0
 
 redis:
-  url: redis://redis-cache:6379   # O 'redis://localhost:6379' si corres el proceso nativo en tu máquina
+  url: redis://redis-cache:6379 # O 'redis://localhost:6379' si corres el proceso nativo en tu máquina
   onFailure: open
 
 logging:
-  level: info
+  level: error
 
 routes:
   # ===============================================================
   # Ruta mapeada a la PokéAPI Real
   # ===============================================================
-  - prefix: /pokemon
+  - prefix: /api
     target: https://pokeapi.co/api/v2
-    stripPrefix: true              # Elimina '/pokemon' antes de reenviar a pokeapi.co/api/v2
+    stripPrefix: true # Elimina '/pokemon' antes de reenviar a pokeapi.co/api/v2
     rateLimit:
-      maxRequests: 10              # Limita a 10 llamadas locales por minuto
+      maxRequests: 10 # Limita a 10 llamadas locales por minuto
       windowSeconds: 60
