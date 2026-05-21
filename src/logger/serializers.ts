@@ -21,7 +21,7 @@ export const errSerializer = (err: any) => {
   if (!err) {
     return err;
   }
-  
+
   const isProd = process.env['NODE_ENV'] === 'production';
   return {
     type: err.constructor?.name || err.name || 'Error',

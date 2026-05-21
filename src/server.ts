@@ -1,11 +1,13 @@
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import httpProxy from '@fastify/http-proxy';
 import { Logger } from 'pino';
+import { register } from 'prom-client';
 import { GatewayConfig, ConfigSnapshot } from './config/types.js';
 import { RouteRegistry } from './routing/registry.js';
 import { MiddlewarePipeline } from './middleware/pipeline.js';
 import { registerErrorHandler } from './errors/handler.js';
 import { buildForwardingHeaders } from './proxy/headers.js';
+import { MetricsPlugin } from './middleware/metrics/plugin.js';
 
 // Declarar el decorator en el tipo FastifyInstance
 declare module 'fastify' {
@@ -17,7 +19,7 @@ declare module 'fastify' {
 /**
  * Registra de manera dinámica y reactiva los plugins de `@fastify/http-proxy` para cada ruta
  * especificada en la configuración del Gateway.
- * 
+ *
  * @param server Instancia de Fastify.
  * @param config Configuración del Gateway.
  * @param pipeline Orquestador de middlewares.
@@ -25,7 +27,7 @@ declare module 'fastify' {
 export function registerProxyRoutes(
   server: FastifyInstance,
   config: GatewayConfig,
-  pipeline: MiddlewarePipeline
+  pipeline: MiddlewarePipeline,
 ): void {
   // Registrar los proxies de forma invertida o según el matching (de más específico a menos específico)
   // para que Fastify haga match correcto del prefijo en cascada
@@ -35,7 +37,10 @@ export function registerProxyRoutes(
     const rewritePrefix = route.stripPrefix ? '' : route.prefix;
 
     const replyOptions: any = {
-      rewriteRequestHeaders: (request: FastifyRequest, headers: Record<string, string | string[] | undefined>) => {
+      rewriteRequestHeaders: (
+        request: FastifyRequest,
+        headers: Record<string, string | string[] | undefined>,
+      ) => {
         const forwarding = buildForwardingHeaders(request);
         return {
           ...headers,
@@ -51,7 +56,7 @@ export function registerProxyRoutes(
 
     server.log.info(
       { prefix: route.prefix, target: route.target, stripPrefix: route.stripPrefix },
-      `Registrando proxy inverso para prefijo: ${route.prefix} -> ${route.target}`
+      `Registrando proxy inverso para prefijo: ${route.prefix} -> ${route.target}`,
     );
 
     server.register(httpProxy, {
@@ -61,16 +66,18 @@ export function registerProxyRoutes(
       preHandler: pipeline.getPreHandler(),
       replyOptions,
       // undiciOptions adicionales en caso de timeouts de conexión
-      undici: route.timeout?.connect ? {
-        connectTimeout: route.timeout.connect,
-      } : undefined,
+      undici: route.timeout?.connect
+        ? {
+            connectTimeout: route.timeout.connect,
+          }
+        : undefined,
     });
   }
 }
 
 /**
  * Construye e inicializa el servidor Fastify unificando ruteo, middlewares y políticas de error.
- * 
+ *
  * @param config Configuración del Gateway cargada e inmutable.
  * @param pipeline Orquestador del pipeline de middlewares.
  * @param logger Instancia compartida de Logger Pino.
@@ -81,7 +88,8 @@ export function buildServer(
   config: GatewayConfig,
   pipeline: MiddlewarePipeline,
   logger: Logger,
-  snapshotRef?: { current: ConfigSnapshot }
+  snapshotRef?: { current: ConfigSnapshot },
+  metricsPlugin?: MetricsPlugin,
 ): FastifyInstance {
   const server = fastify({
     logger: {
@@ -119,10 +127,24 @@ export function buildServer(
     }
   });
 
+  // 3.1. Registrar ganchos globales de métricas si están habilitados
+  if (config.metrics?.enabled && metricsPlugin) {
+    server.addHook('onRequest', metricsPlugin.onRequestHook);
+    server.addHook('onResponse', metricsPlugin.onResponseHook);
+    server.addHook('onError', metricsPlugin.onErrorHook);
+    server.addHook('onRequestAbort', metricsPlugin.onAbortHook);
+  }
+
+  // 3.2. Registrar endpoint /metrics nativo (no-proxy) antes de las rutas proxy
+  if (config.metrics?.enabled) {
+    const metricsPath = config.metrics.path || '/metrics';
+    server.get(metricsPath, async (_request, reply) => {
+      reply.header('Content-Type', register.contentType).send(await register.metrics());
+    });
+  }
+
   // 4. Registrar los proxies de microservicios basados en la configuración inicial
   registerProxyRoutes(server, config, pipeline);
 
   return server;
 }
-
-

@@ -23,7 +23,7 @@ const HTTP_STATUS_TEXTS: Record<number, string> = {
 /**
  * Construye un objeto estructurado de respuesta de error JSON uniforme.
  * Filtra de manera segura detalles de infraestructura o stack traces en producción.
- * 
+ *
  * @param error Objeto de error capturado.
  * @param requestId Identificador único de la petición de Fastify.
  * @param timestamp Marca de tiempo en formato ISO.
@@ -32,11 +32,11 @@ const HTTP_STATUS_TEXTS: Record<number, string> = {
 export function buildErrorResponse(
   error: any,
   requestId?: string,
-  timestamp: string = new Date().toISOString()
+  timestamp: string = new Date().toISOString(),
 ): ErrorResponse {
   const statusCode = error.statusCode || error.status || 500;
   const errorName = HTTP_STATUS_TEXTS[statusCode] || 'Internal Server Error';
-  
+
   const response: ErrorResponse = {
     statusCode,
     error: errorName,

@@ -51,7 +51,7 @@ describe('RedisRateLimitStore', () => {
     mockExec.mockResolvedValue(null as any);
 
     await expect(store.increment(key, 60)).rejects.toThrow(
-      'La transacción del rate limiter en Redis no devolvió resultados.'
+      'La transacción del rate limiter en Redis no devolvió resultados.',
     );
   });
 
@@ -62,7 +62,7 @@ describe('RedisRateLimitStore', () => {
     mockExec.mockResolvedValue([] as any); // Array vacío
 
     await expect(store.increment(key, 60)).rejects.toThrow(
-      'El comando INCR en la transacción de Redis no devolvió respuesta.'
+      'El comando INCR en la transacción de Redis no devolvió respuesta.',
     );
   });
 
@@ -70,9 +70,7 @@ describe('RedisRateLimitStore', () => {
     const store = new RedisRateLimitStore(mockRedis);
     const key = 'ratelimit:127.0.0.1:/api:1763114400';
 
-    mockExec.mockResolvedValue([
-      [new Error('Redis is overloaded'), null],
-    ]);
+    mockExec.mockResolvedValue([[new Error('Redis is overloaded'), null]]);
 
     await expect(store.increment(key, 60)).rejects.toThrow('Redis is overloaded');
   });

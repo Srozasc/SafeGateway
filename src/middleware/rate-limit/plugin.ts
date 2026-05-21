@@ -70,17 +70,17 @@ export class RateLimitPlugin implements GatewayPlugin {
       // 5. Bloquear petición si se excede el límite (HTTP 429)
       if (count > maxRequests) {
         const secondsRemaining = Math.max(0, resetAt - Math.floor(nowMs / 1000));
-        
+
         reply.header('Retry-After', secondsRemaining);
         reply.status(429).send({
           error: 'Too Many Requests',
           message: `Límite de peticiones excedido. Inténtalo de nuevo en ${secondsRemaining} segundos.`,
           retryAfter: secondsRemaining,
         });
-        
+
         this.logger.warn(
           { ip, prefix, count, maxRequests, secondsRemaining },
-          'Rate limit superado para la IP'
+          'Rate limit superado para la IP',
         );
       }
     } catch (error) {

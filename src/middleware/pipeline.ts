@@ -39,7 +39,7 @@ export class MiddlewarePipeline {
    * Ejecuta secuencialmente el gancho `onRequest` de todos los plugins registrados.
    * Si un plugin invoca un short-circuit (ej. respondiendo la petición directamente
    * mediante `reply.send`), detiene inmediatamente la ejecución del pipeline.
-   * 
+   *
    * @param ctx Contexto de la petición HTTP actual.
    */
   public async executeOnRequest(ctx: RequestContext): Promise<void> {
@@ -56,7 +56,7 @@ export class MiddlewarePipeline {
 
   /**
    * Ejecuta secuencialmente el gancho `onResponse` de todos los plugins registrados.
-   * 
+   *
    * @param ctx Contexto de la respuesta HTTP actual.
    */
   public async executeOnResponse(ctx: ResponseContext): Promise<void> {
@@ -74,7 +74,7 @@ export class MiddlewarePipeline {
   public getPreHandler() {
     return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
       const gatewayContext = request.gatewayContext;
-      
+
       // Si no existe contexto del gateway o coincidencia de ruta, omitir
       if (!gatewayContext || !gatewayContext.routeMatch) {
         return;

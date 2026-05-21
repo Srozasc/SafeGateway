@@ -9,6 +9,12 @@ redis:
 logging:
   level: info
 
+metrics:
+  enabled: true
+  path: /metrics
+  defaultLabels:
+    environment: development
+
 routes:
   # ===============================================================
   # Ruta Pública (Redirige al Backend Mock)
@@ -16,6 +22,8 @@ routes:
   - prefix: /public
     target: http://mock-service:8080
     stripPrefix: true
+    # metricsLabel no definido para probar fallback a prefix
+    # backendName no definido para probar fallback a hostname del target ("mock-service")
 
   # ===============================================================
   # Ruta Protegida con JWT (Redirige al Backend Mock)
@@ -38,6 +46,8 @@ routes:
   - prefix: /api
     target: https://pokeapi.co/api/v2
     stripPrefix: true
+    metricsLabel: "pokeapi"
+    backendName: "pokeapi-ext"
     rateLimit:
       maxRequests: 8
       windowSeconds: 60

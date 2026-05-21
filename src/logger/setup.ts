@@ -5,7 +5,7 @@ import { reqSerializer, resSerializer, errSerializer } from './serializers.js';
 /**
  * Crea e inicializa una instancia de Pino configurada para producción y desarrollo.
  * Formato estructurado JSON Lines a stdout con serializadores personalizados y redacción de datos sensibles.
- * 
+ *
  * @param level Nivel de log inicial a aplicar (debug | info | warn | error)
  * @returns Instancia configurada de pino.Logger
  */

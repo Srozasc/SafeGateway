@@ -88,6 +88,42 @@ services:
     networks:
       - gateway-network
 
+  # ===============================================================
+  # Prometheus - Recolector de métricas de series de tiempo
+  # ===============================================================
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: gateway-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - gateway
+    networks:
+      - gateway-network
+
+  # ===============================================================
+  # Grafana - Visualización de métricas y dashboards
+  # ===============================================================
+  grafana:
+    image: grafana/grafana:12.1.0
+    container_name: gateway-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - gateway-network
+
 networks:
   gateway-network:
     driver: bridge

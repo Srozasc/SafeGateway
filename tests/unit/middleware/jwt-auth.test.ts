@@ -61,7 +61,7 @@ describe('JwtAuthPlugin', () => {
     payload: any,
     secret: string = SECRET_KEY,
     algorithm: string = 'HS256',
-    expiration: string | number = '2h'
+    expiration: string | number = '2h',
   ): Promise<string> {
     const encodedSecret = new TextEncoder().encode(secret);
     return await new SignJWT(payload)
@@ -135,7 +135,10 @@ describe('JwtAuthPlugin', () => {
   });
 
   it('debería retornar HTTP 401 si el token tiene una firma inválida', async () => {
-    const token = await generateToken({ sub: 'user-1' }, 'different-secret-key-32-chars-at-least!!!');
+    const token = await generateToken(
+      { sub: 'user-1' },
+      'different-secret-key-32-chars-at-least!!!',
+    );
     mockRequest.headers['authorization'] = `Bearer ${token}`;
 
     const ctx: RequestContext = {
@@ -213,7 +216,7 @@ describe('JwtAuthPlugin', () => {
   it('debería sanitizar/remover las cabeceras x-jwt-claim-* entrantes del cliente para evitar spoofing', async () => {
     const payload = { sub: 'real-user-123' };
     const token = await generateToken(payload);
-    
+
     mockRequest.headers['authorization'] = `Bearer ${token}`;
     // Headers maliciosos enviados por el cliente
     mockRequest.headers['x-jwt-claim-sub'] = 'spoofed-user';
@@ -236,10 +239,10 @@ describe('JwtAuthPlugin', () => {
   });
 
   it('debería ignorar claims de tipo objeto o array para la inyección de cabeceras', async () => {
-    const payload = { 
-      sub: 'user-123', 
+    const payload = {
+      sub: 'user-123',
       metadata: { department: 'IT' },
-      roles: ['admin', 'billing']
+      roles: ['admin', 'billing'],
     };
     const token = await generateToken(payload);
     mockRequest.headers['authorization'] = `Bearer ${token}`;

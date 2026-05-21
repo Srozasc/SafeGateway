@@ -170,7 +170,7 @@ describe('JWT Authentication Integration Tests', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    
+
     // El backend debe recibir exclusivamente los datos legítimos del token, los spoofed se eliminan
     const receivedHeaders = backend.lastRequestHeaders;
     expect(receivedHeaders).toBeDefined();

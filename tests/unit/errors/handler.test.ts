@@ -1,10 +1,10 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { 
-  GatewayError, 
-  RouteNotFoundError, 
-  RateLimitError, 
-  BackendError 
+import {
+  GatewayError,
+  RouteNotFoundError,
+  RateLimitError,
+  BackendError,
 } from '../../../src/errors/types.js';
 import { buildErrorResponse } from '../../../src/errors/responses.js';
 import { registerErrorHandler } from '../../../src/errors/handler.js';
@@ -124,11 +124,11 @@ describe('Global Error Module', () => {
             error: 'Internal Server Error',
             message: 'Base de datos inaccesible',
             requestId: 'test-req-id',
-          })
+          }),
         );
         expect(mockRequest.log.error).toHaveBeenCalledWith(
           expect.objectContaining({ err: error, requestId: 'test-req-id' }),
-          expect.stringContaining('Error del servidor de nivel 5xx')
+          expect.stringContaining('Error del servidor de nivel 5xx'),
         );
         expect(mockRequest.log.warn).not.toHaveBeenCalled();
       });
@@ -144,11 +144,11 @@ describe('Global Error Module', () => {
             statusCode: 400,
             error: 'Bad Request',
             message: 'Entrada no válida',
-          })
+          }),
         );
         expect(mockRequest.log.warn).toHaveBeenCalledWith(
           expect.objectContaining({ err: error, statusCode: 400 }),
-          expect.stringContaining('Error de nivel 4xx')
+          expect.stringContaining('Error de nivel 4xx'),
         );
         expect(mockRequest.log.error).not.toHaveBeenCalled();
       });
@@ -174,11 +174,11 @@ describe('Global Error Module', () => {
             statusCode: 404,
             error: 'Not Found',
             message: expect.stringContaining('No se encontró ninguna ruta'),
-          })
+          }),
         );
         expect(mockRequest.log.warn).toHaveBeenCalledWith(
           expect.objectContaining({ url: '/api/v1/test', method: 'POST' }),
-          expect.stringContaining('Ruta no registrada')
+          expect.stringContaining('Ruta no registrada'),
         );
       });
     });

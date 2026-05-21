@@ -42,7 +42,7 @@ export function interpolateEnvVars(rawContent: string): string {
 export function loadConfig(configPathOverride?: string): Readonly<GatewayConfig> {
   // Buscar el path en la variable de entorno CONFIG_PATH o el parámetro, con fallback a `./config/gateway.yaml`
   const resolvedPath = path.resolve(
-    configPathOverride || process.env['CONFIG_PATH'] || './config/gateway.yaml'
+    configPathOverride || process.env['CONFIG_PATH'] || './config/gateway.yaml',
   );
 
   // 1. Validar que el archivo exista

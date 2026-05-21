@@ -9,7 +9,7 @@ export class ConfigReloader {
   constructor(
     private readonly configPath: string,
     private readonly snapshotRef: { current: ConfigSnapshot },
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
 
   /**
@@ -48,7 +48,7 @@ export class ConfigReloader {
       if (applied.length === 0) {
         this.logger.info(
           { ignoredChanges: ignored },
-          'No se detectaron cambios aplicables en la configuración.'
+          'No se detectaron cambios aplicables en la configuración.',
         );
         this.isReloading = false;
         return { success: true, applied: [], ignored };
@@ -72,7 +72,7 @@ export class ConfigReloader {
 
       this.logger.info(
         { appliedChanges: applied, ignoredChanges: ignored },
-        'Configuración recargada exitosamente en caliente.'
+        'Configuración recargada exitosamente en caliente.',
       );
 
       this.isReloading = false;
@@ -81,7 +81,7 @@ export class ConfigReloader {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(
         { err: error instanceof Error ? { message: error.message, stack: error.stack } : error },
-        `Recarga de configuración fallida. Manteniendo configuración anterior. Error: ${errorMessage}`
+        `Recarga de configuración fallida. Manteniendo configuración anterior. Error: ${errorMessage}`,
       );
       this.isReloading = false;
       return {
@@ -98,7 +98,7 @@ export class ConfigReloader {
    */
   private detectChanges(
     oldConfig: GatewayConfig,
-    newConfig: GatewayConfig
+    newConfig: GatewayConfig,
   ): { applied: string[]; ignored: string[] } {
     const applied: string[] = [];
     const ignored: string[] = [];
@@ -126,7 +126,9 @@ export class ConfigReloader {
 
     // --- Sección routes (estructura de la lista) ---
     if (oldConfig.routes.length !== newConfig.routes.length) {
-      ignored.push(`routes: la cantidad de rutas cambió de ${oldConfig.routes.length} a ${newConfig.routes.length}`);
+      ignored.push(
+        `routes: la cantidad de rutas cambió de ${oldConfig.routes.length} a ${newConfig.routes.length}`,
+      );
     }
 
     // --- Sección routes (comparación una a una) ---

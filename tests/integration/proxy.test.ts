@@ -86,7 +86,7 @@ describe('Proxy Integration Tests', () => {
 
     const receivedHeaders = backend.lastRequestHeaders;
     expect(receivedHeaders).toBeDefined();
-    
+
     // X-Forwarded-For acumulativo
     expect(receivedHeaders?.['x-forwarded-for']).toContain('203.0.113.50, 127.0.0.1');
     expect(receivedHeaders?.['x-forwarded-host']).toBe('my-custom-gateway.com');
@@ -208,7 +208,7 @@ describe('Proxy Integration Tests', () => {
     });
 
     expect(backend.lastRequestMethod).toBe('GET');
-    
+
     // Como stripPrefix es true, /microservice-a/echo debe transformarse en /echo
     expect(backend.lastRequestUrl).toBe('/echo');
   });

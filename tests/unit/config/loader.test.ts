@@ -16,10 +16,12 @@ describe('Config Loader & Interpolator', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     process.env = { ...originalEnv };
-    
+
     // Crear espías limpios sobre fs
     existsSpy = jest.spyOn(fs, 'existsSync') as jest.SpiedFunction<typeof fs.existsSync>;
-    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<typeof fs.readFileSync>;
+    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<
+      typeof fs.readFileSync
+    >;
   });
 
   afterAll(() => {
@@ -43,7 +45,7 @@ describe('Config Loader & Interpolator', () => {
 
       expect(() => interpolateEnvVars(rawContent)).toThrow(MissingEnvVarError);
       expect(() => interpolateEnvVars(rawContent)).toThrow(
-        'La variable de entorno requerida no está definida en el sistema: ${NON_EXISTING_VAR}'
+        'La variable de entorno requerida no está definida en el sistema: ${NON_EXISTING_VAR}',
       );
     });
   });
@@ -75,7 +77,9 @@ routes: [] # Inválido (requiere al menos una ruta)
       readSpy.mockReturnValue(invalidYamlContent as any);
 
       expect(() => loadConfig('invalid-schema.yaml')).toThrow(ConfigValidationError);
-      expect(() => loadConfig('invalid-schema.yaml')).toThrow('La validación de la configuración falló');
+      expect(() => loadConfig('invalid-schema.yaml')).toThrow(
+        'La validación de la configuración falló',
+      );
     });
 
     it('debería cargar exitosamente y aplicar valores por defecto en un YAML válido', () => {

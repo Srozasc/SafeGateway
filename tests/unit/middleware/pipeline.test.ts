@@ -1,10 +1,10 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { 
-  MiddlewarePipeline, 
-  GatewayPlugin, 
-  RequestContext, 
-  ResponseContext 
+import {
+  MiddlewarePipeline,
+  GatewayPlugin,
+  RequestContext,
+  ResponseContext,
 } from '../../../src/middleware/pipeline.js';
 import { RouteMatch } from '../../../src/routing/types.js';
 
@@ -212,7 +212,7 @@ describe('MiddlewarePipeline', () => {
           request: req,
           reply: mockReply,
           routeMatch: mockRouteMatch,
-        })
+        }),
       );
     });
 

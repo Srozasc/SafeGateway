@@ -33,6 +33,12 @@ export interface JwtAuthConfig {
   forwardClaims: string[];
 }
 
+export interface MetricsConfig {
+  enabled: boolean;
+  path: string;
+  defaultLabels: Record<string, string>;
+}
+
 export interface RouteConfig {
   prefix: string;
   target: string;
@@ -40,6 +46,8 @@ export interface RouteConfig {
   rateLimit?: RateLimitConfig;
   timeout?: RouteTimeoutConfig;
   jwt?: JwtAuthConfig;
+  metricsLabel?: string;
+  backendName?: string;
 }
 
 export interface OverrideConfig {
@@ -51,6 +59,7 @@ export interface GatewayConfig {
   server: ServerConfig;
   redis: RedisConfig;
   logging: LoggingConfig;
+  metrics: MetricsConfig;
   routes: RouteConfig[];
   overrides?: OverrideConfig[];
 }
@@ -72,4 +81,3 @@ export interface ReloadResult {
   ignored: string[];
   error?: string;
 }
-

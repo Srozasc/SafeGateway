@@ -29,7 +29,10 @@ export class JwtAuthPlugin implements GatewayPlugin {
     // 3. Extraer token del header Authorization
     const token = this.extractBearerToken(request);
     if (!token) {
-      this.logger.warn({ url: request.url }, 'Petición rechazada: Cabecera Authorization no encontrada o malformada');
+      this.logger.warn(
+        { url: request.url },
+        'Petición rechazada: Cabecera Authorization no encontrada o malformada',
+      );
       reply.status(401).send({
         error: 'Unauthorized',
         message: 'Token de autenticación requerido.',
@@ -43,7 +46,7 @@ export class JwtAuthPlugin implements GatewayPlugin {
     try {
       const secretKey = new TextEncoder().encode(jwtConfig.secret);
       const algorithm = jwtConfig.algorithm || 'HS256';
-      
+
       const { payload } = await jwtVerify(token, secretKey, {
         algorithms: [algorithm],
       });
@@ -56,11 +59,10 @@ export class JwtAuthPlugin implements GatewayPlugin {
       // 6. Inyectar claims como headers para el backend
       const claimsToForward = jwtConfig.forwardClaims || DEFAULT_FORWARD_CLAIMS;
       this.injectClaimHeaders(request, payload, claimsToForward);
-
     } catch (error) {
       this.logger.warn(
         { err: error instanceof Error ? error.message : String(error), url: request.url },
-        'Token JWT inválido, expirado o malformado'
+        'Token JWT inválido, expirado o malformado',
       );
 
       reply.status(401).send({
@@ -101,7 +103,7 @@ export class JwtAuthPlugin implements GatewayPlugin {
   private sanitizeClaimHeaders(request: any): void {
     const headers = request.headers;
     const headerKeys = Object.keys(headers);
-    
+
     for (const key of headerKeys) {
       if (key.toLowerCase().startsWith(JWT_CLAIM_HEADER_PREFIX)) {
         delete headers[key];

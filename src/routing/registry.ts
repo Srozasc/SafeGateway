@@ -22,7 +22,7 @@ export class RouteRegistry {
   /**
    * Resuelve el matching de ruta para una URL de petición entrante.
    * Prioridad: Override exacto -> Prefijo más específico (largo).
-   * 
+   *
    * @param url URL de la petición entrante (puede contener query params).
    * @returns El RouteMatch correspondiente o null si ninguna ruta coincide.
    */
@@ -39,7 +39,7 @@ export class RouteRegistry {
       if (r.prefix === '/') {
         return true; // Prefijo raíz coincide con todo
       }
-      
+
       // Debe coincidir exactamente con el prefijo o ser seguido por una barra diagonal
       // Ej: prefijo /api debe coincidir con /api o /api/users, pero NO con /apiv2
       return pathWithoutQuery === r.prefix || pathWithoutQuery.startsWith(`${r.prefix}/`);
@@ -57,9 +57,7 @@ export class RouteRegistry {
 
     // Determinar el rate limit efectivo
     // Prioridad: 1. Override Rate Limit, 2. Route Rate Limit, 3. null (sin límite)
-    const effectiveRateLimit = override
-      ? override.rateLimit
-      : route.rateLimit || null;
+    const effectiveRateLimit = override ? override.rateLimit : route.rateLimit || null;
 
     return {
       route,

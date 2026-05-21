@@ -288,9 +288,9 @@ pnpm docker:build
 
 ---
 
-## 📊 Observabilidad y Tooling de Desarrollo (Dozzle & JSON Schema)
+## 📊 Observabilidad, Métricas y Tooling de Desarrollo (Prometheus, Grafana, Dozzle & JSON Schema)
 
-El Gateway incluye un stack de desarrollo optimizado para facilitar el diagnóstico, monitoreo y configuración local sin sobrecargar los componentes en producción.
+El Gateway incluye un stack de desarrollo y observabilidad optimizado para facilitar el diagnóstico, monitoreo en tiempo real y configuración local sin sobrecargar los componentes en producción.
 
 ### 1. Visualización de Logs en Tiempo Real (Dozzle)
 
@@ -334,6 +334,63 @@ Si el esquema de configuración Zod en `src/config/schema.ts` se modifica (por e
 Para actualizarlo:
 1. Modifica la estructura en `src/config/schema.ts`.
 2. Replica de forma correspondiente las propiedades, tipos y descripciones en `config/gateway-schema.json`.
+
+---
+
+### 3. Métricas y Observabilidad (Prometheus + Grafana)
+
+El API Gateway incluye soporte nativo y de alto rendimiento para la recolección y exposición de métricas de telemetría compatibles con **Prometheus**. Esto permite monitorear la salud de las rutas, los tiempos de respuesta y la eficiencia del rate limiting en tiempo real.
+
+#### Características y Red de Seguridad
+* **Endpoint `/metrics` Nativo:** Expone de forma nativa un endpoint en formato de texto plano que recopila tanto las métricas por defecto de Node.js (CPU, memoria, loops de eventos) como las métricas personalizadas del Gateway.
+* **Mitigación de Fugas en Conexiones In-Flight:** La métrica de peticiones activas (`gateway_http_requests_in_flight`) cuenta con una red de doble seguridad (doble mitigación). Utiliza un flag único (`Symbol` privado) para evitar doble decremento por eventos redundantes de Fastify y un listener directo al socket de bajo nivel (`request.raw.socket.once('close')`) para asegurar que si un cliente interrumpe abruptamente la conexión, el contador de peticiones en vuelo se decremente correctamente.
+* **Baja Cardinalidad Controlada:** Para evitar problemas de sobrecarga y crecimiento desmedido en la base de datos de Prometheus (cardinalidad), las etiquetas de las métricas están acotadas a valores controlados:
+  * `method`: Método HTTP (`GET`, `POST`, etc.).
+  * `route`: Prefijo lógico o nombre descriptivo asignado a la ruta (`metricsLabel` en la configuración) o fallback a `unmatched`.
+  * `status_code`: Código de estado HTTP retornado (`200`, `404`, `429`, `500`, o `499` para peticiones canceladas/abortadas).
+  * `backend`: Nombre descriptivo del backend (`backendName`) o fallback al hostname destino de la petición (o `unknown`).
+
+#### Métricas Personalizadas Expuestas
+| Métrica | Tipo | Etiquetas | Descripción |
+| :--- | :--- | :--- | :--- |
+| `gateway_http_requests_total` | Counter | `method`, `route`, `status_code`, `backend` | Cantidad total acumulada de peticiones HTTP procesadas por el Gateway. |
+| `gateway_http_request_duration_seconds` | Histogram | `method`, `route`, `status_code`, `backend` | Latencia de procesamiento de las peticiones en segundos (buckets: `0.005s` a `10s`). |
+| `gateway_http_requests_in_flight` | Gauge | `method`, `route` | Cantidad actual de peticiones siendo procesadas de forma concurrente. |
+| `gateway_rate_limit_hits_total` | Counter | `route` | Cantidad de peticiones rechazadas con código `429 (Too Many Requests)` por rate limit. |
+
+#### Configuración del Módulo de Métricas
+En el archivo `gateway.yaml` se pueden configurar las siguientes propiedades bajo la clave global `metrics`:
+```yaml
+metrics:
+  enabled: true                  # Habilita o deshabilita la recolección y exposición de métricas
+  path: /metrics                 # Ruta donde se expondrá el endpoint (Por defecto: /metrics)
+  defaultLabels:                 # Etiquetas globales que se inyectarán en todas las métricas
+    env: production
+    region: us-east-1
+
+routes:
+  - prefix: /api
+    target: http://users-service:8080
+    metricsLabel: users-api       # Sobrescribe el valor de la etiqueta 'route' en las métricas
+    backendName: users-backend   # Sobrescribe el valor de la etiqueta 'backend' en las métricas
+```
+
+#### Levantando el Stack de Monitoreo Local
+El entorno de desarrollo preconfigurado en `docker/docker-compose.example.yml` incluye servicios listos para usar de **Prometheus** y **Grafana** autoaprovisionados:
+1. **Configuración de Raspado:** Prometheus está configurado para raspar automáticamente el endpoint `/metrics` del Gateway cada 5 segundos.
+2. **Dashboard Auto-Aprovisionado:** Grafana arranca con un dashboard preconfigurado interactivo llamado **Gateway Overview** que ofrece los siguientes 4 paneles esenciales:
+   * **RPS (Requests por Segundo):** Muestra el volumen de tráfico actual y su evolución histórica.
+   * **Latencia P95:** Visualiza el percentil 95 de duración de las peticiones por ruta para identificar cuellos de botella de rendimiento.
+   * **Distribución de Códigos HTTP:** Un gráfico de distribución que desglosa las respuestas en familias (`2xx`, `4xx`, `5xx`, etc.).
+   * **Bloqueos por Rate Limit (Hits 429):** Monitorea las peticiones bloqueadas por rate limit en tiempo real.
+
+Para levantar el stack de monitoreo:
+```bash
+docker compose -f docker/docker-compose.example.yml up -d
+```
+* **Acceso a Grafana:** Abre en tu navegador [http://localhost:3001](http://localhost:3001).
+* **Credenciales de Acceso:** Usuario: `admin`, Contraseña: `admin` (se solicita cambio al primer inicio o se puede omitir).
+* **Acceso a Prometheus (Opcional):** Abre [http://localhost:9090](http://localhost:9090) para realizar consultas PromQL directamente.
 
 ---
 

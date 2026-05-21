@@ -5,7 +5,7 @@ import { RouteNotFoundError } from './types.js';
 /**
  * Registra los manejadores globales de error y no encontrado en la instancia de Fastify.
  * Centraliza el formateo de respuestas JSON y la escritura de logs estructurados.
- * 
+ *
  * @param fastify Instancia del servidor Fastify.
  */
 export function registerErrorHandler(fastify: FastifyInstance): void {
@@ -24,12 +24,12 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
     if (statusCode >= 500) {
       request.log.error(
         { err: error, requestId, url: request.url, method: request.method },
-        `Error del servidor de nivel 5xx capturado: ${error.message}`
+        `Error del servidor de nivel 5xx capturado: ${error.message}`,
       );
     } else {
       request.log.warn(
         { err: error, requestId, url: request.url, method: request.method, statusCode },
-        `Error de nivel 4xx capturado (${statusCode}): ${error.message}`
+        `Error de nivel 4xx capturado (${statusCode}): ${error.message}`,
       );
     }
 
@@ -47,11 +47,11 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
     // Loguear el intento fallido de acceso
     request.log.warn(
       { url: request.url, method: request.method, requestId },
-      `Ruta no registrada en el Gateway: ${request.url}`
+      `Ruta no registrada en el Gateway: ${request.url}`,
     );
 
     const response = buildErrorResponse(error, requestId, timestamp);
-    
+
     reply.status(404).send(response);
   });
 }

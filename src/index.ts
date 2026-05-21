@@ -5,11 +5,12 @@ import { createLogger } from './logger/setup.js';
 import { RedisRateLimitStore } from './middleware/rate-limit/store.js';
 import { RateLimitPlugin } from './middleware/rate-limit/plugin.js';
 import { JwtAuthPlugin } from './middleware/jwt-auth/plugin.js';
-import { MiddlewarePipeline } from './middleware/pipeline.js';
+import { MiddlewarePipeline, GatewayPlugin } from './middleware/pipeline.js';
 import { buildServer } from './server.js';
 import { RouteRegistry } from './routing/registry.js';
 import { ConfigSnapshot } from './config/types.js';
 import { ConfigReloader } from './config/reloader.js';
+import { MetricsPlugin } from './middleware/metrics/plugin.js';
 
 let server: FastifyInstance | undefined;
 let redis: Redis | undefined;
@@ -36,7 +37,7 @@ async function bootstrap(): Promise<void> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         logger.info(`Conectando a Redis en ${redisUrl} (Intento ${attempt}/3)...`);
-        
+
         // Crear instancia de ioredis configurada con timeouts cortos para fallar rápido en el startup
         const tempRedis = new Redis(redisUrl, {
           maxRetriesPerRequest: 1,
@@ -52,7 +53,7 @@ async function bootstrap(): Promise<void> {
       } catch (err) {
         logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
-          `Intento ${attempt}/3 de conexión a Redis fallido`
+          `Intento ${attempt}/3 de conexión a Redis fallido`,
         );
         if (attempt < 3) {
           // Esperar 1 segundo antes de reintentar
@@ -84,13 +85,22 @@ async function bootstrap(): Promise<void> {
     logger.info('Configurando módulo de Autenticación JWT...');
     const jwtAuthPlugin = new JwtAuthPlugin(logger);
 
+    // Configurar módulo de Métricas Prometheus
+    let metricsPlugin: MetricsPlugin | undefined;
+    const pluginsList: GatewayPlugin[] = [rateLimitPlugin, jwtAuthPlugin];
+    if (config.metrics.enabled) {
+      logger.info('Configurando módulo de Métricas Prometheus...');
+      metricsPlugin = new MetricsPlugin(config, logger);
+      pluginsList.push(metricsPlugin);
+    }
+
     // 6. Configurar e instanciar la Middleware Pipeline
     logger.info('Inicializando orquestador de Middleware Pipeline...');
-    const pipeline = new MiddlewarePipeline([rateLimitPlugin, jwtAuthPlugin]);
+    const pipeline = new MiddlewarePipeline(pluginsList);
 
     // 7. Construir e inicializar el servidor Fastify
     logger.info('Construyendo instancia del servidor Fastify...');
-    server = buildServer(config, pipeline, logger, snapshotRef);
+    server = buildServer(config, pipeline, logger, snapshotRef, metricsPlugin);
 
     // 8. Inicializar el módulo de recarga (ConfigReloader)
     const configPath = process.env['CONFIG_PATH'] || './config/gateway.yaml';
@@ -99,14 +109,14 @@ async function bootstrap(): Promise<void> {
     // 9. Levantar el puerto y host del servidor de forma asíncrona
     const { port, host } = config.server;
     await server.listen({ port, host });
-    
+
     logger.info(`API Gateway levantado y escuchando en http://${host}:${port}`);
   } catch (error) {
     logger.fatal(
       { err: error instanceof Error ? { message: error.message, stack: error.stack } : error },
-      'Excepción fatal ocurrida durante el arranque (bootstrap) del API Gateway. Deteniendo el proceso...'
+      'Excepción fatal ocurrida durante el arranque (bootstrap) del API Gateway. Deteniendo el proceso...',
     );
-    
+
     // Garantizar liberación de recursos en fallo de startup
     if (redis) {
       try {
@@ -119,7 +129,7 @@ async function bootstrap(): Promise<void> {
 
 /**
  * Manejador de apagado limpio y seguro (Graceful Shutdown) del proceso.
- * 
+ *
  * @param signal Señal del sistema operativo (SIGTERM o SIGINT)
  */
 async function gracefulShutdown(signal: string): Promise<void> {
@@ -146,7 +156,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   } catch (error) {
     logger.error(
       { err: error instanceof Error ? { message: error.message, stack: error.stack } : error },
-      'Error ocurrido durante el proceso de graceful shutdown.'
+      'Error ocurrido durante el proceso de graceful shutdown.',
     );
     process.exit(1);
   }
@@ -165,4 +175,3 @@ process.on('SIGHUP', async () => {
 
 // Arrancar la aplicación
 bootstrap();
-

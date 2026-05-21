@@ -38,7 +38,7 @@ export class MockBackend {
               url: req.url,
               headers: req.headers,
               body: body,
-            })
+            }),
           );
         } else if (req.url?.includes('/error')) {
           res.writeHead(500, { 'Content-Type': 'application/json' });

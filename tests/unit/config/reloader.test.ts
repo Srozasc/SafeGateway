@@ -31,7 +31,9 @@ describe('ConfigReloader Unit Tests', () => {
     process.env = { ...originalEnv };
 
     existsSpy = jest.spyOn(fs, 'existsSync') as jest.SpiedFunction<typeof fs.existsSync>;
-    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<typeof fs.readFileSync>;
+    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<
+      typeof fs.readFileSync
+    >;
 
     logger = pino({ level: 'silent' });
     const registry = new RouteRegistry(baseConfig);

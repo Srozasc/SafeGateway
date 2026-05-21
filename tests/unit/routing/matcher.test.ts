@@ -45,14 +45,14 @@ describe('Route Matcher & Registry', () => {
   it('debería ordenar las rutas por longitud de prefijo descendente al instanciarse', () => {
     const routes = registry.getRoutes();
     expect(routes[0]?.prefix).toBe('/api/v2'); // El más largo primero
-    expect(routes[1]?.prefix).toBe('/admin');  // Longitud 6
-    expect(routes[2]?.prefix).toBe('/api');   // Longitud 4
-    expect(routes[3]?.prefix).toBe('/');      // Longitud 1 (el más corto)
+    expect(routes[1]?.prefix).toBe('/admin'); // Longitud 6
+    expect(routes[2]?.prefix).toBe('/api'); // Longitud 4
+    expect(routes[3]?.prefix).toBe('/'); // Longitud 1 (el más corto)
   });
 
   it('debería coincidir con el prefijo más largo (más específico) disponible', () => {
     const match = registry.match('/api/v2/users/profile');
-    
+
     expect(match).not.toBeNull();
     expect(match?.route.prefix).toBe('/api/v2');
     expect(match?.route.target).toBe('http://backend-v2:9090');

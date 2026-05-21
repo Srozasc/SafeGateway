@@ -101,6 +101,50 @@
         "level": "info"
       }
     },
+    "metrics": {
+      "type": "object",
+      "description": "Configuración del módulo de métricas Prometheus.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "description": "Habilitar/deshabilitar la recolección y exposición de métricas."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": true
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^/",
+              "description": "Endpoint HTTP de scraping (por ejemplo, '/metrics')."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "/metrics"
+        },
+        "defaultLabels": {
+          "type": "object",
+          "description": "Labels adicionales globales que se agregan a todas las métricas.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "default": {
+        "enabled": true,
+        "path": "/metrics",
+        "defaultLabels": {}
+      }
+    },
     "routes": {
       "type": "array",
       "description": "Lista de rutas declarativas que el Gateway intercepta y reenvía a backends.",
@@ -182,6 +226,28 @@
           },
           "jwt": {
             "$ref": "#/definitions/jwtConfig"
+          },
+          "metricsLabel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Override del label 'route' para métricas de esta ruta."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
+          },
+          "backendName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Override del label 'backend' para métricas de esta ruta."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
           }
         }
       }

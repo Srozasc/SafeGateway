@@ -140,7 +140,7 @@ describe('RateLimitPlugin', () => {
       // Debe consultar al store con la IP correcta y el prefijo
       expect(mockStore.increment).toHaveBeenCalledWith(
         expect.stringContaining('ratelimit:8.8.8.8:/api:'),
-        60
+        60,
       );
 
       // Verificar inyección de cabeceras de límite
@@ -187,7 +187,7 @@ describe('RateLimitPlugin', () => {
         expect.objectContaining({
           error: 'Too Many Requests',
           retryAfter: expect.any(Number),
-        })
+        }),
       );
 
       // Debe registrar el incidente en el logger como advertencia
@@ -198,7 +198,7 @@ describe('RateLimitPlugin', () => {
           count: 6,
           maxRequests: 5,
         }),
-        'Rate limit superado para la IP'
+        'Rate limit superado para la IP',
       );
     });
 
@@ -235,7 +235,7 @@ describe('RateLimitPlugin', () => {
           ip: '127.0.0.1',
           prefix: '/api',
         }),
-        'Fallo al conectar con el store de Rate Limit'
+        'Fallo al conectar con el store de Rate Limit',
       );
     });
 
@@ -267,7 +267,7 @@ describe('RateLimitPlugin', () => {
         expect.objectContaining({
           error: 'Service Unavailable',
           message: expect.stringContaining('rate limiter'),
-        })
+        }),
       );
 
       // Debe registrar la advertencia del fallo de conexión
@@ -277,7 +277,7 @@ describe('RateLimitPlugin', () => {
           ip: '127.0.0.1',
           prefix: '/api',
         }),
-        'Fallo al conectar con el store de Rate Limit'
+        'Fallo al conectar con el store de Rate Limit',
       );
     });
   });

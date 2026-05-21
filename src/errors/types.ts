@@ -8,7 +8,7 @@ export class GatewayError extends Error {
     // Captura el stack trace correcto en Node
     Error.captureStackTrace(this.target || this, this.constructor);
   }
-  
+
   // Getter de conveniencia para compatibilidad
   private get target(): Error {
     return this;
@@ -59,6 +59,9 @@ export class RateLimitError extends GatewayError {
 
 export class BackendError extends GatewayError {
   constructor(message: string, details?: string) {
-    super(`Error al comunicarse con el servicio de destino (backend): ${message}${details ? ` (${details})` : ''}`, 502);
+    super(
+      `Error al comunicarse con el servicio de destino (backend): ${message}${details ? ` (${details})` : ''}`,
+      502,
+    );
   }
 }

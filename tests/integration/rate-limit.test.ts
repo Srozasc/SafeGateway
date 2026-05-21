@@ -118,7 +118,7 @@ describe('Rate Limit Integration Tests', () => {
     });
     expect(res3.statusCode).toBe(429);
     expect(res3.headers['retry-after']).toBeDefined();
-    
+
     const body = JSON.parse(res3.body);
     expect(body.error).toBe('Too Many Requests');
     expect(body.message).toContain('Límite de peticiones excedido');
