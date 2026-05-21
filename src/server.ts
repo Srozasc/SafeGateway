@@ -113,7 +113,9 @@ export function buildServer(
   server.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
     const match = finalSnapshotRef.current.registry.match(request.url);
     if (match) {
-      request.routeContext = match;
+      request.gatewayContext = {
+        routeMatch: match,
+      };
     }
   });
 

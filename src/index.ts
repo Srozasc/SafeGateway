@@ -4,6 +4,7 @@ import { loadConfig } from './config/loader.js';
 import { createLogger } from './logger/setup.js';
 import { RedisRateLimitStore } from './middleware/rate-limit/store.js';
 import { RateLimitPlugin } from './middleware/rate-limit/plugin.js';
+import { JwtAuthPlugin } from './middleware/jwt-auth/plugin.js';
 import { MiddlewarePipeline } from './middleware/pipeline.js';
 import { buildServer } from './server.js';
 import { RouteRegistry } from './routing/registry.js';
@@ -75,14 +76,17 @@ async function bootstrap(): Promise<void> {
       },
     };
 
-    // 5. Configurar el módulo de Rate Limiting
+    // 5. Configurar los módulos de Rate Limiting y Autenticación JWT
     logger.info('Configurando módulo de Rate Limiting...');
     const rateLimitStore = new RedisRateLimitStore(redis);
     const rateLimitPlugin = new RateLimitPlugin(rateLimitStore, logger, config.redis.onFailure);
 
+    logger.info('Configurando módulo de Autenticación JWT...');
+    const jwtAuthPlugin = new JwtAuthPlugin(logger);
+
     // 6. Configurar e instanciar la Middleware Pipeline
     logger.info('Inicializando orquestador de Middleware Pipeline...');
-    const pipeline = new MiddlewarePipeline([rateLimitPlugin]);
+    const pipeline = new MiddlewarePipeline([rateLimitPlugin, jwtAuthPlugin]);
 
     // 7. Construir e inicializar el servidor Fastify
     logger.info('Construyendo instancia del servidor Fastify...');

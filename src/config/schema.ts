@@ -48,6 +48,20 @@ export const RouteTimeoutConfigSchema = z.object({
   response: z.number().int().positive('El timeout de respuesta debe ser un entero positivo').optional(),
 });
 
+// Esquema para autenticación JWT
+export const JwtAuthConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  secret: z
+    .string()
+    .min(1, 'El secreto JWT no puede estar vacío'),
+  algorithm: z
+    .enum(['HS256', 'HS384', 'HS512'])
+    .default('HS256'),
+  forwardClaims: z
+    .array(z.string().min(1, 'Cada claim debe ser un string no vacío'))
+    .default(['sub', 'iss', 'aud', 'exp', 'iat', 'jti']),
+});
+
 // Esquema para las rutas del Gateway
 export const RouteConfigSchema = z.object({
   prefix: z
@@ -70,6 +84,7 @@ export const RouteConfigSchema = z.object({
   stripPrefix: z.boolean().default(false),
   rateLimit: RateLimitConfigSchema.optional(),
   timeout: RouteTimeoutConfigSchema.optional(),
+  jwt: JwtAuthConfigSchema.optional(),
 });
 
 // Esquema para los overrides

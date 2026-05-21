@@ -1,4 +1,6 @@
 import type { RouteRegistry } from '../routing/registry.js';
+import type { RouteMatch } from '../routing/types.js';
+import type { JWTPayload } from 'jose';
 
 export interface ServerConfig {
   port: number;
@@ -24,12 +26,20 @@ export interface RouteTimeoutConfig {
   response?: number;
 }
 
+export interface JwtAuthConfig {
+  enabled: boolean;
+  secret: string;
+  algorithm: 'HS256' | 'HS384' | 'HS512';
+  forwardClaims: string[];
+}
+
 export interface RouteConfig {
   prefix: string;
   target: string;
   stripPrefix?: boolean;
   rateLimit?: RateLimitConfig;
   timeout?: RouteTimeoutConfig;
+  jwt?: JwtAuthConfig;
 }
 
 export interface OverrideConfig {
@@ -43,6 +53,11 @@ export interface GatewayConfig {
   logging: LoggingConfig;
   routes: RouteConfig[];
   overrides?: OverrideConfig[];
+}
+
+export interface GatewayContext {
+  routeMatch: RouteMatch;
+  jwtClaims?: JWTPayload;
 }
 
 export interface ConfigSnapshot {

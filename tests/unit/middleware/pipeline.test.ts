@@ -170,7 +170,7 @@ describe('MiddlewarePipeline', () => {
   });
 
   describe('getPreHandler', () => {
-    it('debería omitir la ejecución si request.routeContext no está presente', async () => {
+    it('debería omitir la ejecución si request.gatewayContext no está presente', async () => {
       const onRequestSpy = jest.fn<() => Promise<void>>();
       const plugin: GatewayPlugin = {
         name: 'test-plugin',
@@ -180,7 +180,7 @@ describe('MiddlewarePipeline', () => {
       const pipeline = new MiddlewarePipeline([plugin]);
       const preHandler = pipeline.getPreHandler();
 
-      // Request sin 'routeContext'
+      // Request sin 'gatewayContext'
       const req = {} as unknown as FastifyRequest;
 
       await preHandler(req, mockReply);
@@ -188,7 +188,7 @@ describe('MiddlewarePipeline', () => {
       expect(onRequestSpy).not.toHaveBeenCalled();
     });
 
-    it('debería ejecutar el pipeline si request.routeContext está presente', async () => {
+    it('debería ejecutar el pipeline si request.gatewayContext está presente', async () => {
       const onRequestSpy = jest.fn<any>();
       const plugin: GatewayPlugin = {
         name: 'test-plugin',
@@ -198,9 +198,11 @@ describe('MiddlewarePipeline', () => {
       const pipeline = new MiddlewarePipeline([plugin]);
       const preHandler = pipeline.getPreHandler();
 
-      // Request con 'routeContext'
+      // Request con 'gatewayContext'
       const req = {
-        routeContext: mockRouteMatch,
+        gatewayContext: {
+          routeMatch: mockRouteMatch,
+        },
       } as unknown as FastifyRequest;
 
       await preHandler(req, mockReply);
@@ -226,7 +228,9 @@ describe('MiddlewarePipeline', () => {
       const preHandler = pipeline.getPreHandler();
 
       const req = {
-        routeContext: mockRouteMatch,
+        gatewayContext: {
+          routeMatch: mockRouteMatch,
+        },
       } as unknown as FastifyRequest;
 
       await expect(preHandler(req, mockReply)).rejects.toThrow('Database connection failed');

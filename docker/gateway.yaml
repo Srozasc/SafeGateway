@@ -11,11 +11,48 @@ logging:
 
 routes:
   # ===============================================================
+  # Ruta Pública (Redirige al Backend Mock)
+  # ===============================================================
+  - prefix: /public
+    target: http://mock-service:8080
+    stripPrefix: true
+
+  # ===============================================================
+  # Ruta Protegida con JWT (Redirige al Backend Mock)
+  # ===============================================================
+  - prefix: /secure
+    target: http://mock-service:8080
+    stripPrefix: true
+    jwt:
+      enabled: true
+      secret: "secreto-para-pruebas-locales-de-32-chars!!!"
+      algorithm: HS256
+      forwardClaims:
+        - sub
+        - role
+        - email
+
+  # ===============================================================
   # Ruta mapeada a la PokéAPI Real
   # ===============================================================
   - prefix: /api
     target: https://pokeapi.co/api/v2
-    stripPrefix: true # Elimina '/pokemon' antes de reenviar a pokeapi.co/api/v2
+    stripPrefix: true
     rateLimit:
-      maxRequests: 8 # Limita a 12 llamadas locales por minuto
+      maxRequests: 8
       windowSeconds: 60
+
+  # ===============================================================
+  # Ruta de Pruebas Públicas con httpbin.org (Protegida con JWT)
+  # ===============================================================
+  - prefix: /httpbin
+    target: https://httpbin.org
+    stripPrefix: true
+    jwt:
+      enabled: true
+      secret: "secreto-para-pruebas-locales-de-32-chars!!!"
+      algorithm: HS256
+      forwardClaims:
+        - sub
+        - role
+        - email

@@ -179,6 +179,9 @@
                 ]
               }
             }
+          },
+          "jwt": {
+            "$ref": "#/definitions/jwtConfig"
           }
         }
       }
@@ -240,6 +243,66 @@
               "type": "integer",
               "minimum": 1,
               "description": "Duración de la ventana de tiempo (en segundos) en la que se reinicia el conteo de peticiones."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        }
+      }
+    },
+    "jwtConfig": {
+      "type": "object",
+      "description": "Configuración de Autenticación y Validación de tokens JWT por ruta.",
+      "required": ["secret"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "description": "Indica si la validación JWT está activa en esta ruta. Por defecto es true si el bloque jwt existe."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": true
+        },
+        "secret": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Clave secreta simétrica utilizada para validar la firma de los tokens JWT."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
+        "algorithm": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["HS256", "HS384", "HS512"],
+              "description": "Algoritmo criptográfico simétrico configurado. Por defecto es HS256."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "HS256"
+        },
+        "forwardClaims": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Lista de claims a ser extraídas e inyectadas como cabeceras en el request hacia el backend (normalizadas en lowercase)."
             },
             {
               "$ref": "#/definitions/envVar"

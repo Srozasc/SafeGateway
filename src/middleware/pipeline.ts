@@ -1,10 +1,11 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { RouteMatch } from '../routing/types.js';
+import { GatewayContext } from '../config/types.js';
 
-// Extensión del tipo FastifyRequest para almacenar el contexto de coincidencia de ruta
+// Extensión del tipo FastifyRequest para almacenar el contexto global del Gateway
 declare module 'fastify' {
   interface FastifyRequest {
-    routeContext?: RouteMatch;
+    gatewayContext?: GatewayContext;
   }
 }
 
@@ -72,17 +73,17 @@ export class MiddlewarePipeline {
    */
   public getPreHandler() {
     return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-      const routeContext = request.routeContext;
+      const gatewayContext = request.gatewayContext;
       
-      // Si no existe contexto de ruta (ej: ruta no matcheada o estática que no pasa por el gateway), omitir
-      if (!routeContext) {
+      // Si no existe contexto del gateway o coincidencia de ruta, omitir
+      if (!gatewayContext || !gatewayContext.routeMatch) {
         return;
       }
 
       const ctx: RequestContext = {
         request,
         reply,
-        routeMatch: routeContext,
+        routeMatch: gatewayContext.routeMatch,
       };
 
       await this.executeOnRequest(ctx);
