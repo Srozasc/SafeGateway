@@ -337,6 +337,55 @@ Para actualizarlo:
 
 ---
 
+## 🔄 Recarga de Configuración en Caliente (Hot Reload)
+
+El Gateway cuenta con soporte para recargar su configuración en caliente sin detener el proceso ni re-bindear puertos, garantizando **zero-downtime absoluto**. Este mecanismo funciona mediante el envío de la señal del sistema operativo `SIGHUP`.
+
+### 🚀 Cómo Ejecutar la Recarga en Caliente
+
+#### En Entorno Contenerizado (Docker/Docker Compose)
+Para notificar al Gateway dentro del contenedor de que el archivo `gateway.yaml` ha sido modificado, ejecuta el siguiente comando desde la máquina host:
+
+```bash
+docker kill -s SIGHUP gateway-service
+```
+
+#### En Desarrollo Local (Linux/macOS)
+Envía la señal directamente al proceso Node.js utilizando su Identificador de Proceso (PID):
+
+```bash
+kill -s SIGHUP <PID_DEL_PROCESO>
+```
+
+---
+
+### 🧠 Mecanismo de Snapshots Inmutables
+
+La recarga implementa un patrón de **Swap de Snapshots Inmutables** en memoria:
+1. **Validación Previa:** Al recibir la señal, el Gateway lee, interpola y valida la nueva configuración con **Zod** antes de realizar cualquier cambio. Si la validación falla (ej. YAML inválido o tipos incorrectos), la recarga se aborta por completo y el Gateway continúa operando de forma estable con la configuración anterior (**Rollback Automático**).
+2. **Swap Atómico:** Si la nueva configuración es válida, se genera un nuevo snapshot completo (`ConfigSnapshot`) y se realiza un reemplazo atómico de la referencia en memoria. Los requests concurrentes en vuelo terminan de procesarse con el snapshot con el que iniciaron, mientras que los nuevos consumen instantáneamente el snapshot recién aplicado.
+3. **Protección Concurrente:** El proceso está protegido contra ráfagas de señales mediante un **Mutex lógico** asíncrono. Señales adicionales recibidas mientras hay una recarga en curso serán ignoradas de forma segura emitiendo un aviso (`warn`) en el log.
+
+---
+
+### 📋 Campos Recargables vs. Campos Estáticos
+
+Para mantener la estabilidad de la red y el sistema, los campos se clasifican en dos categorías cuando el Gateway procesa una recarga:
+
+#### ⚡ Campos Recargables en Caliente (Se aplican inmediatamente)
+* **`routes[].rateLimit` (`maxRequests`, `windowSeconds`)**: Los límites de tasa se reajustan dinámicamente y se aplican a los nuevos requests. **Los contadores vigentes en Redis se preservan intactos**.
+* **`overrides` (excepciones de endpoints)**: Permite añadir, modificar o remover overrides específicos de rate limit sobre paths exactos.
+* **`logging.level`**: Modifica en caliente el nivel del logger dinámicamente en Pino (`logger.level = nuevoLevel`) sin reiniciar.
+
+#### ⚠️ Campos Estáticos (Ignorados de forma segura con un `warn`)
+Cualquier cambio en las siguientes secciones estructurales no bloqueará la recarga de los campos aplicables, pero no surtirá efecto y emitirá una advertencia (`warn`) en los logs auditados indicando que **requieren un reinicio completo del Gateway**:
+* **`server.port` / `server.host`**: Requieren re-bind del socket TCP.
+* **`redis.url` / `redis.onFailure`**: Requieren reconectar o reconstruir la inicialización del plugin.
+* **`routes[].prefix` / `routes[].target` / `routes[].stripPrefix` / `routes[].timeout`**: Están inyectados en la inicialización estática del proxy inverso (`@fastify/http-proxy`).
+* **Agregar o eliminar rutas**: No se pueden desregistrar plugins dinámicamente en Fastify.
+
+---
+
 ## 🔒 Seguridad e Integridad de Datos
 
 * **Ocultación de Errores Internos**: El manejador de errores global intercepta cualquier error crítico en producción (estados `5xx`) y retorna una estructura JSON limpia sin exponer trazas de pila (*stack traces*), dependencias caídas, IPs o puertos de backends internos.

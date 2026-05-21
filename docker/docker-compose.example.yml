@@ -20,8 +20,8 @@ services:
       - REDIS_URL=redis://redis-cache:6379
       - LOG_LEVEL=info
     volumes:
-      # Montar la configuración declarativa en modo de solo lectura (ro)
-      - ./gateway.yaml:/app/config/gateway.yaml:ro
+      # Montar el directorio de configuración en modo de solo lectura (ro) para evitar fallos de inodo en Windows
+      - .:/app/config:ro
     depends_on:
       redis-cache:
         condition: service_healthy

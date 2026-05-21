@@ -6,9 +6,14 @@ import { RedisRateLimitStore } from './middleware/rate-limit/store.js';
 import { RateLimitPlugin } from './middleware/rate-limit/plugin.js';
 import { MiddlewarePipeline } from './middleware/pipeline.js';
 import { buildServer } from './server.js';
+import { RouteRegistry } from './routing/registry.js';
+import { ConfigSnapshot } from './config/types.js';
+import { ConfigReloader } from './config/reloader.js';
 
 let server: FastifyInstance | undefined;
 let redis: Redis | undefined;
+let snapshotRef: { current: ConfigSnapshot } | undefined;
+let reloader: ConfigReloader | undefined;
 
 /**
  * Función principal de arranque (bootstrap) del API Gateway.
@@ -59,20 +64,35 @@ async function bootstrap(): Promise<void> {
       throw new Error('No se pudo establecer conexión con el servidor de Redis tras 3 intentos.');
     }
 
-    // 4. Configurar el módulo de Rate Limiting
+    // 4. Crear el snapshot de configuración inicial inmutable
+    logger.info('Creando snapshot de configuración inicial...');
+    const registry = new RouteRegistry(config);
+    snapshotRef = {
+      current: {
+        config,
+        registry,
+        createdAt: new Date().toISOString(),
+      },
+    };
+
+    // 5. Configurar el módulo de Rate Limiting
     logger.info('Configurando módulo de Rate Limiting...');
     const rateLimitStore = new RedisRateLimitStore(redis);
     const rateLimitPlugin = new RateLimitPlugin(rateLimitStore, logger, config.redis.onFailure);
 
-    // 5. Configurar e instanciar la Middleware Pipeline
+    // 6. Configurar e instanciar la Middleware Pipeline
     logger.info('Inicializando orquestador de Middleware Pipeline...');
     const pipeline = new MiddlewarePipeline([rateLimitPlugin]);
 
-    // 6. Construir e inicializar el servidor Fastify
+    // 7. Construir e inicializar el servidor Fastify
     logger.info('Construyendo instancia del servidor Fastify...');
-    server = buildServer(config, pipeline, logger);
+    server = buildServer(config, pipeline, logger, snapshotRef);
 
-    // 7. Levantar el puerto y host del servidor de forma asíncrona
+    // 8. Inicializar el módulo de recarga (ConfigReloader)
+    const configPath = process.env['CONFIG_PATH'] || './config/gateway.yaml';
+    reloader = new ConfigReloader(configPath, snapshotRef, logger);
+
+    // 9. Levantar el puerto y host del servidor de forma asíncrona
     const { port, host } = config.server;
     await server.listen({ port, host });
     
@@ -128,9 +148,17 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-// Escuchar señales de terminación del sistema operativo
+// Escuchar señales del sistema operativo
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+// Escuchar la señal SIGHUP para recargar la configuración en caliente
+process.on('SIGHUP', async () => {
+  if (reloader) {
+    await reloader.reload();
+  }
+});
+
 // Arrancar la aplicación
 bootstrap();
+

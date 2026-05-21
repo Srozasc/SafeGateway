@@ -1,3 +1,5 @@
+import type { RouteRegistry } from '../routing/registry.js';
+
 export interface ServerConfig {
   port: number;
   host: string;
@@ -42,3 +44,17 @@ export interface GatewayConfig {
   routes: RouteConfig[];
   overrides?: OverrideConfig[];
 }
+
+export interface ConfigSnapshot {
+  config: Readonly<GatewayConfig>;
+  registry: RouteRegistry;
+  createdAt: string;
+}
+
+export interface ReloadResult {
+  success: boolean;
+  applied: string[];
+  ignored: string[];
+  error?: string;
+}
+

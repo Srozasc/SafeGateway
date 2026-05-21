@@ -1,7 +1,7 @@
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import httpProxy from '@fastify/http-proxy';
 import { Logger } from 'pino';
-import { GatewayConfig } from './config/types.js';
+import { GatewayConfig, ConfigSnapshot } from './config/types.js';
 import { RouteRegistry } from './routing/registry.js';
 import { MiddlewarePipeline } from './middleware/pipeline.js';
 import { registerErrorHandler } from './errors/handler.js';
@@ -74,12 +74,14 @@ export function registerProxyRoutes(
  * @param config Configuración del Gateway cargada e inmutable.
  * @param pipeline Orquestador del pipeline de middlewares.
  * @param logger Instancia compartida de Logger Pino.
+ * @param snapshotRef Referencia mutable opcional al snapshot de configuración activo.
  * @returns Instancia configurada del servidor Fastify.
  */
 export function buildServer(
   config: GatewayConfig,
   pipeline: MiddlewarePipeline,
-  logger: Logger
+  logger: Logger,
+  snapshotRef?: { current: ConfigSnapshot }
 ): FastifyInstance {
   const server = fastify({
     logger: {
@@ -91,20 +93,34 @@ export function buildServer(
   // 1. Registrar manejador de errores y no encontrados globales
   registerErrorHandler(server);
 
-  // 2. Instanciar y almacenar el RouteRegistry en la instancia del servidor
-  const registry = new RouteRegistry(config);
-  server.decorate('routeRegistry', registry);
+  // Asegurar retrocompatibilidad: crear un snapshotRef local si no fue provisto
+  const finalSnapshotRef = snapshotRef || {
+    current: {
+      config,
+      registry: new RouteRegistry(config),
+      createdAt: new Date().toISOString(),
+    },
+  };
+
+  // 2. Almacenar el RouteRegistry de forma reactiva en la instancia del servidor
+  Object.defineProperty(server, 'routeRegistry', {
+    get: () => finalSnapshotRef.current.registry,
+    enumerable: true,
+    configurable: true,
+  });
 
   // 3. Agregar hook onRequest global para matchear la ruta y guardar el contexto en la petición
   server.addHook('onRequest', async (request: FastifyRequest, _reply: FastifyReply) => {
-    const match = registry.match(request.url);
+    const match = finalSnapshotRef.current.registry.match(request.url);
     if (match) {
       request.routeContext = match;
     }
   });
 
-  // 4. Registrar los proxies de microservicios basados en la configuración
+  // 4. Registrar los proxies de microservicios basados en la configuración inicial
   registerProxyRoutes(server, config, pipeline);
 
   return server;
 }
+
+

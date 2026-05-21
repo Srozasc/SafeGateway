@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 3000
   host: 0.0.0.0
 
@@ -7,7 +7,7 @@ redis:
   onFailure: open
 
 logging:
-  level: error
+  level: info
 
 routes:
   # ===============================================================
@@ -17,5 +17,5 @@ routes:
     target: https://pokeapi.co/api/v2
     stripPrefix: true # Elimina '/pokemon' antes de reenviar a pokeapi.co/api/v2
     rateLimit:
-      maxRequests: 10 # Limita a 10 llamadas locales por minuto
+      maxRequests: 8 # Limita a 12 llamadas locales por minuto
       windowSeconds: 60
