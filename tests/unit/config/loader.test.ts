@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { jest, describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { loadConfig, interpolateEnvVars } from '../../../src/config/loader.js';
 import {
   ConfigFileNotFoundError,
@@ -10,23 +10,23 @@ import {
 
 describe('Config Loader & Interpolator', () => {
   const originalEnv = { ...process.env };
-  let existsSpy: jest.SpiedFunction<typeof fs.existsSync>;
-  let readSpy: jest.SpiedFunction<typeof fs.readFileSync>;
+  let existsSpy: vi.SpiedFunction<typeof fs.existsSync>;
+  let readSpy: vi.SpiedFunction<typeof fs.readFileSync>;
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     process.env = { ...originalEnv };
 
     // Crear espías limpios sobre fs
-    existsSpy = jest.spyOn(fs, 'existsSync') as jest.SpiedFunction<typeof fs.existsSync>;
-    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<
+    existsSpy = vi.spyOn(fs, 'existsSync') as vi.SpiedFunction<typeof fs.existsSync>;
+    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as vi.SpiedFunction<
       typeof fs.readFileSync
     >;
   });
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('interpolateEnvVars', () => {

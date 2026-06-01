@@ -1,6 +1,10 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { RouteMatch } from '../routing/types.js';
-import { GatewayContext } from '../config/types.js';
+import type { RouteMatch } from '../routing/types.js';
+import type { GatewayContext } from '../config/types.js';
+import { ProxyEngine } from '../proxy/engine.js';
+import { ConnectionPoolManager } from '../proxy/pool.js';
+import { NOOP_HOOKS } from '../proxy/hooks.js';
+import { Logger } from 'pino';
 
 // Extensión del tipo FastifyRequest para almacenar el contexto global del Gateway
 declare module 'fastify' {
@@ -89,4 +93,35 @@ export class MiddlewarePipeline {
       await this.executeOnRequest(ctx);
     };
   }
+}
+
+/**
+ * Creates a proxy handler that integrates with the middleware pipeline.
+ * The proxy is the LAST step after all middleware plugins have run.
+ */
+export function createProxyHandler(
+  poolManager: ConnectionPoolManager,
+  logger: Logger
+) {
+  const proxyEngine = new ProxyEngine(poolManager, NOOP_HOOKS, logger);
+
+  return async function proxyHandler(
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): Promise<void> {
+    const gatewayContext = request.gatewayContext;
+    if (!gatewayContext?.routeMatch) {
+      // No route matched - let Fastify handle 404
+      reply.status(404).send({
+        error: 'Not Found',
+        message: 'No route matched',
+        statusCode: 404,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // Forward to backend using the proxy engine
+    await proxyEngine.forward(request, reply, gatewayContext.routeMatch);
+  };
 }

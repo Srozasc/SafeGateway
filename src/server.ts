@@ -1,13 +1,12 @@
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import httpProxy from '@fastify/http-proxy';
 import { Logger } from 'pino';
 import { register } from 'prom-client';
 import { GatewayConfig, ConfigSnapshot } from './config/types.js';
 import { RouteRegistry } from './routing/registry.js';
-import { MiddlewarePipeline } from './middleware/pipeline.js';
+import { MiddlewarePipeline, createProxyHandler } from './middleware/pipeline.js';
 import { registerErrorHandler } from './errors/handler.js';
-import { buildForwardingHeaders } from './proxy/headers.js';
 import { MetricsPlugin } from './middleware/metrics/plugin.js';
+import { ConnectionPoolManager } from './proxy/pool.js';
 
 // Declarar el decorator en el tipo FastifyInstance
 declare module 'fastify' {
@@ -17,66 +16,8 @@ declare module 'fastify' {
 }
 
 /**
- * Registra de manera dinámica y reactiva los plugins de `@fastify/http-proxy` para cada ruta
- * especificada en la configuración del Gateway.
- *
- * @param server Instancia de Fastify.
- * @param config Configuración del Gateway.
- * @param pipeline Orquestador de middlewares.
- */
-export function registerProxyRoutes(
-  server: FastifyInstance,
-  config: GatewayConfig,
-  pipeline: MiddlewarePipeline,
-): void {
-  // Registrar los proxies de forma invertida o según el matching (de más específico a menos específico)
-  // para que Fastify haga match correcto del prefijo en cascada
-  const sortedRoutes = [...config.routes].sort((a, b) => b.prefix.length - a.prefix.length);
-
-  for (const route of sortedRoutes) {
-    const rewritePrefix = route.stripPrefix ? '' : route.prefix;
-
-    const replyOptions: any = {
-      rewriteRequestHeaders: (
-        request: FastifyRequest,
-        headers: Record<string, string | string[] | undefined>,
-      ) => {
-        const forwarding = buildForwardingHeaders(request);
-        return {
-          ...headers,
-          ...forwarding,
-        };
-      },
-    };
-
-    // Configurar timeouts si se especifican
-    if (route.timeout?.response) {
-      replyOptions.timeout = route.timeout.response;
-    }
-
-    server.log.info(
-      { prefix: route.prefix, target: route.target, stripPrefix: route.stripPrefix },
-      `Registrando proxy inverso para prefijo: ${route.prefix} -> ${route.target}`,
-    );
-
-    server.register(httpProxy, {
-      upstream: route.target,
-      prefix: route.prefix,
-      rewritePrefix,
-      preHandler: pipeline.getPreHandler(),
-      replyOptions,
-      // undiciOptions adicionales en caso de timeouts de conexión
-      undici: route.timeout?.connect
-        ? {
-            connectTimeout: route.timeout.connect,
-          }
-        : undefined,
-    });
-  }
-}
-
-/**
  * Construye e inicializa el servidor Fastify unificando ruteo, middlewares y políticas de error.
+ * Usa ProxyEngine (undici) para el forwarding de requests.
  *
  * @param config Configuración del Gateway cargada e inmutable.
  * @param pipeline Orquestador del pipeline de middlewares.
@@ -143,8 +84,41 @@ export function buildServer(
     });
   }
 
-  // 4. Registrar los proxies de microservicios basados en la configuración inicial
-  registerProxyRoutes(server, config, pipeline);
+  // 4. Crear el ConnectionPoolManager para los backends
+  const poolManager = new ConnectionPoolManager(logger);
+
+  // 5. Crear el handler de proxy usando el pipeline
+  const proxyHandler = createProxyHandler(poolManager, logger);
+
+  // 6. Registrar las rutas usando el preHandler del pipeline + proxy handler
+  const sortedRoutes = [...finalSnapshotRef.current.config.routes].sort(
+    (a, b) => b.prefix.length - a.prefix.length
+  );
+
+  for (const routeConfig of sortedRoutes) {
+    logger.info(
+      { prefix: routeConfig.prefix, target: routeConfig.target, stripPrefix: routeConfig.stripPrefix },
+      `Registrando proxy para prefijo: ${routeConfig.prefix} -> ${routeConfig.target}`
+    );
+
+    // Append wildcard to match all subpaths under this prefix
+    // E.g., '/api' becomes '/api*' to match '/api', '/api/users', '/api/items'
+    // We use /prefix* syntax which matches the prefix followed by anything
+    // If prefix ends with /, append just * (e.g., '/api/' -> '/api/*')
+    // If prefix doesn't end with /, append * (e.g., '/api' -> '/api*')
+    const routeUrl = `${routeConfig.prefix}*`;
+
+    // Register the route with preHandler (middleware pipeline) and the actual handler (proxy)
+    server.route({
+      method: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+      url: routeUrl,
+      preHandler: pipeline.getPreHandler(),
+      handler: proxyHandler,
+    });
+  }
+
+  // 7. Almacenar el poolManager para poder cerrarlo en shutdown
+  (server as any).poolManager = poolManager;
 
   return server;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { RouteRegistry } from '../../../src/routing/registry.js';
 import { GatewayConfig } from '../../../src/config/types.js';
 

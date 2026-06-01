@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
 import pino from 'pino';
 import { buildServer } from '../../src/server.js';

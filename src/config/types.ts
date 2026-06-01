@@ -23,7 +23,8 @@ export interface RateLimitConfig {
 
 export interface RouteTimeoutConfig {
   connect?: number;
-  response?: number;
+  headers?: number;
+  body?: number;
 }
 
 export interface JwtAuthConfig {

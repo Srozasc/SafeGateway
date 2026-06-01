@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import pino from 'pino';
 import { SignJWT } from 'jose';
@@ -31,7 +31,7 @@ describe('JwtAuthPlugin', () => {
         this.statusCode = code;
         return this;
       },
-      send: jest.fn<any>().mockImplementation(function (this: any, body: any) {
+      send: vi.fn<any>().mockImplementation(function (this: any, body: any) {
         this.sent = true;
         this.body = body;
         return this;

@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { jest, describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest';
 import pino, { Logger } from 'pino';
 import { ConfigReloader } from '../../../src/config/reloader.js';
 import { RouteRegistry } from '../../../src/routing/registry.js';
@@ -7,8 +7,8 @@ import { ConfigSnapshot, GatewayConfig } from '../../../src/config/types.js';
 
 describe('ConfigReloader Unit Tests', () => {
   const originalEnv = { ...process.env };
-  let existsSpy: jest.SpiedFunction<typeof fs.existsSync>;
-  let readSpy: jest.SpiedFunction<typeof fs.readFileSync>;
+  let existsSpy: vi.SpiedFunction<typeof fs.existsSync>;
+  let readSpy: vi.SpiedFunction<typeof fs.readFileSync>;
   let logger: Logger;
   let snapshotRef: { current: ConfigSnapshot };
 
@@ -27,11 +27,11 @@ describe('ConfigReloader Unit Tests', () => {
   };
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     process.env = { ...originalEnv };
 
-    existsSpy = jest.spyOn(fs, 'existsSync') as jest.SpiedFunction<typeof fs.existsSync>;
-    readSpy = jest.spyOn(fs, 'readFileSync') as unknown as jest.SpiedFunction<
+    existsSpy = vi.spyOn(fs, 'existsSync') as vi.SpiedFunction<typeof fs.existsSync>;
+    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as vi.SpiedFunction<
       typeof fs.readFileSync
     >;
 
@@ -48,7 +48,7 @@ describe('ConfigReloader Unit Tests', () => {
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('debería recargar exitosamente cuando cambia logging.level y actualizar Pino', async () => {

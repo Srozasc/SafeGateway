@@ -1,5 +1,5 @@
-import { FastifyRequest } from 'fastify';
-import { ProxyForwardingHeaders } from './types.js';
+import type { FastifyRequest } from 'fastify';
+import type { ProxyForwardingHeaders } from './types.js';
 
 /**
  * Construye de manera segura y estándar las cabeceras de reenvío HTTP (forwarding)

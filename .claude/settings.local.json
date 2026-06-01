@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm add:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm test:unit)",
+      "Bash(node --test tests/unit/config/loader.test.ts tests/unit/config/reloader.test.ts tests/unit/errors/handler.test.ts tests/unit/middleware/jwt-auth.test.ts tests/unit/middleware/metrics/labels.test.ts tests/unit/middleware/pipeline.test.ts tests/unit/middleware/rate-limit/plugin.test.ts tests/unit/middleware/rate-limit/store.test.ts tests/unit/middleware/rate-limit/window.test.ts tests/unit/routing/matcher.test.ts tests/unit/middleware/metrics/plugin.test.ts)",
+      "Bash(node --test --experimental-test-module-types tests/integration/proxy.test.ts)",
+      "Bash(npx tsx:*)",
+      "Bash(pnpm test:integration)",
+      "Bash(npx vitest:*)",
+      "Bash(node -e \"import\\(''vitest''\\).then\\(v => console.log\\(Object.keys\\(v\\).slice\\(0,20\\)\\)\\)\")",
+      "Bash(node -e \"import\\(''vitest''\\).then\\(v => console.log\\(''before'' in v, ''describe'' in v\\)\\)\")",
+      "Bash(node --experimental-vm-modules node_modules/vitest/vitest.mjs run tests/integration/proxy.test.ts)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

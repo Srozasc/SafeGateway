@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import {
   MiddlewarePipeline,
@@ -9,8 +9,8 @@ import {
 import { RouteMatch } from '../../../src/routing/types.js';
 
 describe('MiddlewarePipeline', () => {
-  let mockRequest: jest.Mocked<FastifyRequest>;
-  let mockReply: jest.Mocked<FastifyReply>;
+  let mockRequest: vi.Mocked<FastifyRequest>;
+  let mockReply: vi.Mocked<FastifyReply>;
   let mockRouteMatch: RouteMatch;
 
   beforeEach(() => {
@@ -20,7 +20,7 @@ describe('MiddlewarePipeline', () => {
 
     mockReply = {
       sent: false,
-      send: jest.fn<any>().mockImplementation(function (this: any) {
+      send: vi.fn<any>().mockImplementation(function (this: any) {
         this.sent = true;
         return this;
       }),
@@ -171,7 +171,7 @@ describe('MiddlewarePipeline', () => {
 
   describe('getPreHandler', () => {
     it('debería omitir la ejecución si request.gatewayContext no está presente', async () => {
-      const onRequestSpy = jest.fn<() => Promise<void>>();
+      const onRequestSpy = vi.fn<() => Promise<void>>();
       const plugin: GatewayPlugin = {
         name: 'test-plugin',
         onRequest: onRequestSpy,
@@ -189,7 +189,7 @@ describe('MiddlewarePipeline', () => {
     });
 
     it('debería ejecutar el pipeline si request.gatewayContext está presente', async () => {
-      const onRequestSpy = jest.fn<any>();
+      const onRequestSpy = vi.fn<any>();
       const plugin: GatewayPlugin = {
         name: 'test-plugin',
         onRequest: onRequestSpy,

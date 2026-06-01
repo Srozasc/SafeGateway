@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import pino from 'pino';
 import { register } from 'prom-client';
 import { MetricsPlugin } from '../../../../src/middleware/metrics/plugin.js';
@@ -27,7 +27,7 @@ describe('MetricsPlugin', () => {
     };
 
     mockSocket = {
-      once: jest.fn<any>().mockImplementation((event: string, callback: any) => {
+      once: vi.fn<any>().mockImplementation((event: string, callback: any) => {
         mockSocket.listeners[event] = callback;
         return mockSocket;
       }),

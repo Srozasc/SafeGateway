@@ -1,11 +1,11 @@
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 import Redis from 'ioredis';
 import { RedisRateLimitStore } from '../../../../src/middleware/rate-limit/store.js';
 
 describe('RedisRateLimitStore', () => {
-  const mockIncr = jest.fn();
-  const mockExpire = jest.fn();
-  const mockExec = jest.fn<() => Promise<any>>();
+  const mockIncr = vi.fn();
+  const mockExpire = vi.fn();
+  const mockExec = vi.fn<() => Promise<any>>();
 
   // Mock de ioredis pipeline
   const mockPipeline = {
@@ -20,7 +20,7 @@ describe('RedisRateLimitStore', () => {
 
   // Mock del cliente Redis
   const mockRedis = {
-    multi: jest.fn().mockReturnValue(mockPipeline),
+    multi: vi.fn().mockReturnValue(mockPipeline),
   } as unknown as Redis;
 
   it('debería ejecutar una transacción atómica multi/exec para incrementar y expirar la clave', async () => {

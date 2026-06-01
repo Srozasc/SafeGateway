@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Logger } from 'pino';
 import { RateLimitPlugin } from '../../../../src/middleware/rate-limit/plugin.js';
@@ -6,26 +6,26 @@ import { RateLimitStore } from '../../../../src/middleware/rate-limit/types.js';
 import { RequestContext } from '../../../../src/middleware/pipeline.js';
 
 describe('RateLimitPlugin', () => {
-  let mockStore: jest.Mocked<RateLimitStore>;
-  let mockLogger: jest.Mocked<Logger>;
-  let mockReply: jest.Mocked<FastifyReply>;
+  let mockStore: vi.Mocked<RateLimitStore>;
+  let mockLogger: vi.Mocked<Logger>;
+  let mockReply: vi.Mocked<FastifyReply>;
 
   beforeEach(() => {
     mockStore = {
-      increment: jest.fn<any>(),
+      increment: vi.fn<any>(),
     } as any;
 
     mockLogger = {
-      warn: jest.fn<any>(),
-      info: jest.fn<any>(),
-      error: jest.fn<any>(),
-      debug: jest.fn<any>(),
+      warn: vi.fn<any>(),
+      info: vi.fn<any>(),
+      error: vi.fn<any>(),
+      debug: vi.fn<any>(),
     } as any;
 
     mockReply = {
-      header: jest.fn<any>().mockReturnThis(),
-      status: jest.fn<any>().mockReturnThis(),
-      send: jest.fn<any>().mockReturnThis(),
+      header: vi.fn<any>().mockReturnThis(),
+      status: vi.fn<any>().mockReturnThis(),
+      send: vi.fn<any>().mockReturnThis(),
     } as any;
   });
 

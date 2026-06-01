@@ -40,10 +40,15 @@ export const RouteTimeoutConfigSchema = z.object({
     .int()
     .positive('El timeout de conexión debe ser un entero positivo')
     .optional(),
-  response: z
+  headers: z
     .number()
     .int()
-    .positive('El timeout de respuesta debe ser un entero positivo')
+    .positive('El timeout de headers debe ser un entero positivo')
+    .optional(),
+  body: z
+    .number()
+    .int()
+    .positive('El timeout de body debe ser un entero positivo')
     .optional(),
 });
 
@@ -79,6 +84,10 @@ export const RouteConfigSchema = z.object({
   jwt: JwtAuthConfigSchema.optional(),
   metricsLabel: z.string().optional(),
   backendName: z.string().optional(),
+  // --- Extension for proxy-undici ---
+  retryableMethods: z
+    .array(z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']))
+    .optional(),
 });
 
 // Esquema para los overrides

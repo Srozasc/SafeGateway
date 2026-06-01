@@ -144,7 +144,14 @@ async function gracefulShutdown(signal: string): Promise<void> {
       logger.info('Servidor HTTP cerrado exitosamente.');
     }
 
-    // 2. Cerrar la conexión con el store de Redis
+    // 2. Cerrar los pools de conexiones undici
+    if (server && (server as any).poolManager) {
+      logger.info('Cerrando connection pools de backends...');
+      await (server as any).poolManager.closeAll();
+      logger.info('Connection pools cerrados exitosamente.');
+    }
+
+    // 3. Cerrar la conexión con el store de Redis
     if (redis) {
       logger.info('Cerrando conexión a Redis...');
       await redis.quit();

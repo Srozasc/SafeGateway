@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import {
   GatewayError,
@@ -66,19 +66,19 @@ describe('Global Error Module', () => {
   });
 
   describe('registerErrorHandler', () => {
-    let mockFastify: jest.Mocked<FastifyInstance>;
-    let mockRequest: jest.Mocked<FastifyRequest>;
-    let mockReply: jest.Mocked<FastifyReply>;
+    let mockFastify: vi.Mocked<FastifyInstance>;
+    let mockRequest: vi.Mocked<FastifyRequest>;
+    let mockReply: vi.Mocked<FastifyReply>;
     let storedErrorHandler: any;
     let storedNotFoundHandler: any;
 
     beforeEach(() => {
       mockFastify = {
-        setErrorHandler: jest.fn().mockImplementation((fn: any) => {
+        setErrorHandler: vi.fn().mockImplementation((fn: any) => {
           storedErrorHandler = fn;
           return mockFastify;
         }),
-        setNotFoundHandler: jest.fn().mockImplementation((fn: any) => {
+        setNotFoundHandler: vi.fn().mockImplementation((fn: any) => {
           storedNotFoundHandler = fn;
           return mockFastify;
         }),
@@ -89,16 +89,16 @@ describe('Global Error Module', () => {
         url: '/api/v1/test',
         method: 'POST',
         log: {
-          error: jest.fn<any>(),
-          warn: jest.fn<any>(),
-          info: jest.fn<any>(),
-          debug: jest.fn<any>(),
+          error: vi.fn<any>(),
+          warn: vi.fn<any>(),
+          info: vi.fn<any>(),
+          debug: vi.fn<any>(),
         },
       } as any;
 
       mockReply = {
-        status: jest.fn<any>().mockReturnThis(),
-        send: jest.fn<any>().mockReturnThis(),
+        status: vi.fn<any>().mockReturnThis(),
+        send: vi.fn<any>().mockReturnThis(),
       } as any;
 
       registerErrorHandler(mockFastify);

@@ -79,4 +79,16 @@ export class RouteRegistry {
   public getOverrides(): ReadonlyMap<string, OverrideConfig> {
     return this.overrides;
   }
+
+  /**
+   * Obtiene todos los matches de rutas ordenados de más específico a menos específico.
+   * Útil para registrar todas las rutas en el servidor.
+   */
+  public getAllMatches(): RouteMatch[] {
+    return this.routes.map((route) => ({
+      route,
+      override: this.overrides.get(route.prefix) || null,
+      effectiveRateLimit: route.rateLimit || null,
+    }));
+  }
 }
