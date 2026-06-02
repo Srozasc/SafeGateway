@@ -11,6 +11,7 @@ import { RouteRegistry } from './routing/registry.js';
 import { ConfigSnapshot } from './config/types.js';
 import { ConfigReloader } from './config/reloader.js';
 import { MetricsPlugin } from './middleware/metrics/plugin.js';
+import { createCircuitBreakerPlugin } from './middleware/circuit-breaker/index.js';
 
 let server: FastifyInstance | undefined;
 let redis: Redis | undefined;
@@ -88,6 +89,11 @@ async function bootstrap(): Promise<void> {
     // Configurar módulo de Métricas Prometheus
     let metricsPlugin: MetricsPlugin | undefined;
     const pluginsList: GatewayPlugin[] = [rateLimitPlugin, jwtAuthPlugin];
+
+    // Configurar Circuit Breaker
+    const circuitBreakerPlugin = createCircuitBreakerPlugin(logger);
+    pluginsList.push(circuitBreakerPlugin);
+
     if (config.metrics.enabled) {
       logger.info('Configurando módulo de Métricas Prometheus...');
       metricsPlugin = new MetricsPlugin(config, logger);

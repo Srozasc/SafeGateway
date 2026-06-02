@@ -13,7 +13,8 @@
       "Bash(node -e \"import\\(''vitest''\\).then\\(v => console.log\\(Object.keys\\(v\\).slice\\(0,20\\)\\)\\)\")",
       "Bash(node -e \"import\\(''vitest''\\).then\\(v => console.log\\(''before'' in v, ''describe'' in v\\)\\)\")",
       "Bash(node --experimental-vm-modules node_modules/vitest/vitest.mjs run tests/integration/proxy.test.ts)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

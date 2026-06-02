@@ -62,6 +62,47 @@ export const JwtAuthConfigSchema = z.object({
     .default(['sub', 'iss', 'aud', 'exp', 'iat', 'jti']),
 });
 
+// Esquema para Circuit Breaker
+export const CircuitBreakerConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  errorThreshold: z
+    .number()
+    .int()
+    .min(1, 'El threshold de error debe ser al menos 1')
+    .max(100, 'El threshold de error debe ser como máximo 100')
+    .default(50),
+  requestCount: z
+    .number()
+    .int()
+    .positive('El conteo de requests debe ser positivo')
+    .default(100),
+  recoveryTimeMs: z
+    .number()
+    .int()
+    .positive('El tiempo de recovery debe ser positivo')
+    .default(30000),
+  halfOpenRequests: z
+    .number()
+    .int()
+    .positive('Las requests en half-open deben ser positivas')
+    .default(3),
+  maxRetries: z
+    .number()
+    .int()
+    .nonnegative('Los reintentos no pueden ser negativos')
+    .default(3),
+  retryDelayMs: z
+    .number()
+    .int()
+    .positive('El delay base debe ser positivo')
+    .default(100),
+  retryMaxDelayMs: z
+    .number()
+    .int()
+    .positive('El delay máximo debe ser positivo')
+    .default(5000),
+});
+
 // Esquema para las rutas del Gateway
 export const RouteConfigSchema = z.object({
   prefix: z
@@ -88,6 +129,8 @@ export const RouteConfigSchema = z.object({
   retryableMethods: z
     .array(z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']))
     .optional(),
+  // --- Circuit Breaker ---
+  circuitBreaker: CircuitBreakerConfigSchema.optional(),
 });
 
 // Esquema para los overrides

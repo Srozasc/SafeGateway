@@ -40,6 +40,17 @@ export interface MetricsConfig {
   defaultLabels: Record<string, string>;
 }
 
+export interface CircuitBreakerConfig {
+  enabled: boolean;
+  errorThreshold: number;
+  requestCount: number;
+  recoveryTimeMs: number;
+  halfOpenRequests: number;
+  maxRetries: number;
+  retryDelayMs: number;
+  retryMaxDelayMs: number;
+}
+
 export interface RouteConfig {
   prefix: string;
   target: string;
@@ -49,6 +60,8 @@ export interface RouteConfig {
   jwt?: JwtAuthConfig;
   metricsLabel?: string;
   backendName?: string;
+  retryableMethods?: string[];
+  circuitBreaker?: CircuitBreakerConfig;
 }
 
 export interface OverrideConfig {
