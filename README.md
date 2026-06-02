@@ -1,17 +1,18 @@
-# 🚀 API Gateway HTTP Modular, Standalone y Configurable (MVP)
+# 🚀 API Gateway HTTP Modular, Standalone y Configurable
 
-Un API Gateway robusto, modular, configurable e inmutable desarrollado en **TypeScript** con **Fastify**, diseñado para funcionar como proxy inverso y orquestador de middlewares de alto rendimiento en arquitecturas de microservicios y aplicaciones web modernas.
+Un API Gateway robusto, modular, configurable e inmutable desarrollado en **TypeScript** con **Fastify**, diseñado para funcionar como proxy inverso de alto rendimiento y orquestador de middlewares con patrones de resiliencia avanzados para arquitecturas de microservicios.
 
 ---
 
 ## 📦 Características Principales
 
-* **Proxy Inverso Dinámico**: Configuración flexible por prefijos de enrutamiento con soporte para reescritura de rutas (`stripPrefix`), timeouts específicos de conexión y respuesta, e inyección de cabeceras de forwarding estándar (`X-Forwarded-*`).
+* **Proxy Inverso de Alto Rendimiento (Undici)**: Motor de proxy implementado sobre [Undici](https://undici.nodejs.org/), el cliente HTTP nativo de Node.js. Soporta reescritura de rutas (`stripPrefix`), timeouts de conexión/cabecera/cuerpo de forma granular e inyección de cabeceras de forwarding estándar (`X-Forwarded-*`).
+* **Circuit Breaker & Retries**: Patrón de circuit breaker con máquina de estados (CLOSED → OPEN → HALF_OPEN) y reintentos automáticos con *exponential backoff* y *full jitter* para proteger los backends de sobrecargas y fallas en cascada.
 * **Rate Limiting Distribuido**: Algoritmo *Fixed Window Counter* atómico implementado sobre **Redis** (usando pipelines optimizados) para restringir peticiones por IP, con soporte para comportamientos configurables ante caídas del caché (*fail-open* / *fail-closed*).
 * **Priorización de Enrutamiento en Cascada**: Resolución inteligente de coincidencia de rutas (Rutas específicas/Overrides > Prefijo más largo > Prefijo general).
 * **Configuración Declarativa Inmutable**: Lector de archivos YAML/JSON con validación estricta de esquemas mediante **Zod** y soporte para interpolación segura de variables de entorno (`${ENV_VAR}`).
 * **Registro de Logs Estructurados**: Integración nativa de **Pino** con serializadores de peticiones, respuestas y errores redactando automáticamente información sensible (tokens `Authorization`, cookies, etc.).
-* **Arquitectura de Plugins**: Pipeline extensible en cascada con hooks `onRequest` y `onResponse` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
+* **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onAfterResponse` y `onError` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
 * **Despliegue Contenerizado**: Optimizado mediante una compilación Docker *multi-stage* ultra-ligera (basada en `node:20-alpine`) e instrumentado con chequeos de salud (`HEALTHCHECK`) nativos de red.
 
 ---
@@ -138,13 +139,25 @@ routes:
     rateLimit:            # Opcional. Reglas de Rate Limiting para esta ruta
       maxRequests: 100
       windowSeconds: 60
-    timeout:              # Opcional. Control de tiempos de espera para evitar bloqueos
-      connect: 2000       # Timeout de establecimiento de conexión en milisegundos
-      response: 5000      # Timeout máximo para recibir respuesta del backend en milisegundos
+    timeout:              # Opcional. Timeouts granulares por fase de conexión (ms)
+      connect: 2000       # Timeout de establecimiento de conexión TCP
+      headers: 10000      # Timeout para recibir los headers de respuesta
+      body: 30000         # Timeout para recibir el cuerpo completo de la respuesta
+    circuitBreaker:       # Opcional. Patrón de circuit breaker para este backend
+      enabled: true
+      errorThreshold: 50  # % de errores para abrir el circuit (default: 50)
+      requestCount: 100   # Tamaño de la ventana de evaluación (default: 100)
+      recoveryTimeMs: 30000  # ms en OPEN antes de pasar a HALF_OPEN (default: 30000)
+      halfOpenRequests: 3    # Requests exitosas en HALF_OPEN para cerrar el circuit (default: 3)
+      maxRetries: 3          # Máximo de reintentos por request (default: 3)
+      retryDelayMs: 100      # Base delay para backoff exponencial en ms (default: 100)
+      retryMaxDelayMs: 5000  # Delay máximo de retry en ms (default: 5000)
 
   - prefix: /auth
     target: http://auth-service:8082
     stripPrefix: false
+    circuitBreaker:
+      enabled: false      # Circuit breaker deshabilitado para esta ruta
 
 # ===============================================================
 # Overrides específicos (Excepciones a nivel de endpoint exacto)
@@ -161,11 +174,80 @@ Cualquier campo del archivo YAML puede contener expresiones del tipo `${NOMBRE_V
 
 ---
 
+## 🛡️ Resiliencia: Circuit Breaker y Retries
+
+El Gateway implementa el patrón de **Circuit Breaker** integrado en el motor de proxy (`ProxyEngine`) a través del módulo [`src/middleware/circuit-breaker/`](file:///d:/desarrollo/Gateway/src/middleware/circuit-breaker/). Cada ruta con `circuitBreaker.enabled: true` obtiene su propio circuit breaker independiente.
+
+### Máquina de Estados
+
+```
+                    ┌──────────────────────────────────────┐
+                    │                                      │
+                    ▼                                      │
+            ┌───────────────┐    N errores o 5       ┌────▼──────────┐
+            │    CLOSED     │ ──── consecutivos ────▶│     OPEN      │
+            │  (normal)     │                         │  (bloqueado)  │
+            └───────┬───────┘                         └───────┬───────┘
+                    │                                          │
+                    │ halfOpenRequests                         │ recoveryTimeMs
+                    │ consecutivos OK                          │
+                    │                                          ▼
+                    └─────────────────────────────── HALF_OPEN ◀──┘
+                                                     (probando)
+```
+
+| Estado | Comportamiento |
+|--------|----------------|
+| `CLOSED` | Tráfico fluye con normalidad. Se contabilizan errores en ventana deslizante. |
+| `OPEN` | Rechaza todas las requests con **HTTP 503** y cabecera `Retry-After`. |
+| `HALF_OPEN` | Permite un número limitado de requests de prueba para verificar la recuperación. |
+
+### Transiciones
+
+* **CLOSED → OPEN**: Se activa cuando el porcentaje de errores supera `errorThreshold` en la ventana de `requestCount`, **o** cuando ocurren **5 errores consecutivos**.
+* **OPEN → HALF_OPEN**: Tras `recoveryTimeMs` milisegundos desde el último fallo.
+* **HALF_OPEN → CLOSED**: Cuando `halfOpenRequests` requests consecutivas son exitosas.
+* **HALF_OPEN → OPEN**: Si cualquier request falla durante la prueba, el circuit vuelve a abrirse.
+
+### Retries con Exponential Backoff y Full Jitter
+
+El [`RetryInterceptor`](file:///d:/desarrollo/Gateway/src/middleware/circuit-breaker/retry.ts) reintenta automáticamente requests fallidas usando **backoff exponencial con jitter completo** para evitar el efecto *thundering herd*.
+
+**Fórmula:** `delay = random(0, min(baseDelay × 2^attempt, maxDelay))`
+
+| Intento | Rango de Delay (base=100ms, max=5000ms) |
+|---------|------------------------------------------|
+| 0 (1er retry) | 0 – 100 ms |
+| 1 (2do retry) | 0 – 200 ms |
+| 2 (3er retry) | 0 – 400 ms |
+| 3 (4to retry) | 0 – 800 ms |
+
+**Restricciones de seguridad:**
+- Solo se reintenta en **métodos idempotentes**: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`.
+- Solo se reintenta en errores elegibles: `ECONNREFUSED`, `ETIMEDOUT`, `ECONNRESET`, `ENOTFOUND`, `EPIPE` y códigos HTTP `500`, `502`, `503`, `504`.
+- **No se reintenta** cuando el circuit está en estado `OPEN`.
+
+### Respuesta cuando el Circuit está OPEN
+
+```json
+HTTP/1.1 503 Service Unavailable
+Retry-After: 28
+Content-Type: application/json
+
+{
+  "error": "Circuit Open",
+  "message": "El servicio /api no está disponible temporalmente. Inténtalo de nuevo más tarde.",
+  "retryAfter": 28
+}
+```
+
+---
+
 ## 🔌 Extensibilidad: Crear Plugins Personalizados
 
-El orquestador de middlewares funciona mediante un pipeline secuencial basado en la interfaz `GatewayPlugin`. Puedes crear tus propios middlewares implementando los ganchos `onRequest` y/o `onResponse`.
+El orquestador de middlewares funciona mediante un pipeline secuencial basado en la interfaz `GatewayPlugin`. Los hooks de ciclo de vida del proxy (`ProxyLifecycleHooks`) permiten interceptar el flujo completo.
 
-### Interfaz del Plugin
+### Interfaces del Plugin
 Las interfaces se encuentran definidas en [src/middleware/pipeline.ts](file:///d:/desarrollo/Gateway/src/middleware/pipeline.ts):
 
 ```typescript
@@ -189,8 +271,22 @@ export interface GatewayPlugin {
 }
 ```
 
-### Ejemplo Práctico: Plugin de Telemetría (Medición de Tiempos)
-A continuación se muestra un ejemplo de un plugin que calcula el tiempo de respuesta de las peticiones que pasan por el Gateway:
+### Hooks de Ciclo de Vida del Proxy
+
+Además del pipeline estándar, el `ProxyEngine` expone hooks de bajo nivel para integración con patrones de resiliencia:
+
+```typescript
+export interface ProxyLifecycleHooks {
+  // Ejecutado justo antes de enviar la request al backend
+  onBeforeRequest?(request: FastifyRequest, reply: FastifyReply): Promise<void>;
+  // Ejecutado cuando el backend retorna una respuesta (incluso errores 5xx)
+  onAfterResponse?(statusCode: number, request: FastifyRequest): void;
+  // Ejecutado cuando ocurre un error de red o timeout
+  onError?(error: Error, request: FastifyRequest): void;
+}
+```
+
+### Ejemplo Práctico: Plugin de Telemetría
 
 ```typescript
 // src/middleware/telemetry-plugin.ts
@@ -201,45 +297,31 @@ export class TelemetryPlugin implements GatewayPlugin {
   public readonly name = 'telemetry';
   private readonly logger: Logger;
 
-  constructor(logger: Logger) {
-    this.logger = logger;
-  }
+  constructor(logger: Logger) { this.logger = logger; }
 
-  // Hook ejecutado ANTES de enviar la petición al microservicio
   public async onRequest(ctx: RequestContext): Promise<void> {
-    // Almacenar el timestamp de inicio en el objeto request de Fastify
     (ctx.request as any).startTime = Date.now();
   }
 
-  // Hook ejecutado DESPUÉS de recibir la respuesta del microservicio
   public async onResponse(ctx: ResponseContext): Promise<void> {
-    const startTime = (ctx.request as any).startTime;
-    if (startTime) {
-      const durationMs = Date.now() - startTime;
-      this.logger.info({
-        path: ctx.routeMatch.route.prefix,
-        url: ctx.request.url,
-        durationMs,
-        statusCode: ctx.reply.statusCode
-      }, `Petición procesada en ${durationMs}ms`);
-    }
+    const durationMs = Date.now() - (ctx.request as any).startTime;
+    this.logger.info({ url: ctx.request.url, durationMs }, 'Petición procesada');
   }
 }
 ```
 
 ### Registrar el Plugin en el Bootstrap
-Una vez creado tu plugin, inyéctalo en la matriz de inicialización de la Middleware Pipeline en [src/index.ts](file:///d:/desarrollo/Gateway/src/index.ts):
 
 ```typescript
 // Dentro de bootstrap() en src/index.ts:
-const telemetryPlugin = new TelemetryPlugin(logger);
 const pipeline = new MiddlewarePipeline([
   rateLimitPlugin,
-  telemetryPlugin // Se ejecutará secuencialmente después del rate limiter
+  circuitBreakerPlugin, // Registra hooks de ciclo de vida en ProxyEngine
+  new TelemetryPlugin(logger),
 ]);
 ```
 
-*Nota: Si un plugin responde la petición directamente llamando a `reply.send()` en su gancho `onRequest`, la ejecución de los siguientes middlewares y el reenvío al proxy inverso se **cancelarán automáticamente** (Short-circuit).*
+*Nota: Si un plugin responde la petición directamente llamando a `reply.send()` en su gancho `onRequest`, los siguientes middlewares y el proxy se **cancelarán automáticamente** (Short-circuit).*
 
 ---
 
@@ -339,7 +421,7 @@ Para actualizarlo:
 
 ### 3. Métricas y Observabilidad (Prometheus + Grafana)
 
-El API Gateway incluye soporte nativo y de alto rendimiento para la recolección y exposición de métricas de telemetría compatibles con **Prometheus**. Esto permite monitorear la salud de las rutas, los tiempos de respuesta y la eficiencia del rate limiting en tiempo real.
+El API Gateway incluye soporte nativo y de alto rendimiento para la recolección y exposición de métricas de telemetría compatibles con **Prometheus**. Esto permite monitorear la salud de las rutas, los tiempos de respuesta, la eficiencia del rate limiting y el estado de los circuit breakers en tiempo real.
 
 #### Características y Red de Seguridad
 * **Endpoint `/metrics` Nativo:** Expone de forma nativa un endpoint en formato de texto plano que recopila tanto las métricas por defecto de Node.js (CPU, memoria, loops de eventos) como las métricas personalizadas del Gateway.
@@ -350,13 +432,29 @@ El API Gateway incluye soporte nativo y de alto rendimiento para la recolección
   * `status_code`: Código de estado HTTP retornado (`200`, `404`, `429`, `500`, o `499` para peticiones canceladas/abortadas).
   * `backend`: Nombre descriptivo del backend (`backendName`) o fallback al hostname destino de la petición (o `unknown`).
 
-#### Métricas Personalizadas Expuestas
+#### Métricas del Gateway (HTTP)
 | Métrica | Tipo | Etiquetas | Descripción |
 | :--- | :--- | :--- | :--- |
 | `gateway_http_requests_total` | Counter | `method`, `route`, `status_code`, `backend` | Cantidad total acumulada de peticiones HTTP procesadas por el Gateway. |
 | `gateway_http_request_duration_seconds` | Histogram | `method`, `route`, `status_code`, `backend` | Latencia de procesamiento de las peticiones en segundos (buckets: `0.005s` a `10s`). |
 | `gateway_http_requests_in_flight` | Gauge | `method`, `route` | Cantidad actual de peticiones siendo procesadas de forma concurrente. |
 | `gateway_rate_limit_hits_total` | Counter | `route` | Cantidad de peticiones rechazadas con código `429 (Too Many Requests)` por rate limit. |
+
+#### Métricas del Circuit Breaker
+| Métrica | Tipo | Etiquetas | Descripción |
+| :--- | :--- | :--- | :--- |
+| `gateway_circuit_breaker_state` | Gauge | `route`, `backend` | Estado actual: `0`=CLOSED, `1`=HALF_OPEN, `2`=OPEN. |
+| `gateway_circuit_breaker_failures_total` | Counter | `route`, `backend` | Total de fallos registrados por el circuit breaker. |
+| `gateway_circuit_breaker_requests_total` | Counter | `route`, `backend`, `status` | Total de requests procesadas (etiqueta `status`: `success` / `failure`). |
+| `gateway_circuit_breaker_transitions_total` | Counter | `route`, `backend`, `from_state`, `to_state` | Transiciones de estado del circuit. |
+| `gateway_circuit_breaker_open_total` | Counter | `route`, `backend` | Veces que el circuit ha pasado al estado OPEN. |
+
+#### Métricas de Retry
+| Métrica | Tipo | Etiquetas | Descripción |
+| :--- | :--- | :--- | :--- |
+| `gateway_retries_total` | Counter | `route`, `backend`, `error_code` | Total de reintentos realizados, desglosados por tipo de error. |
+| `gateway_retry_success_total` | Counter | `route`, `backend` | Reintentos que resultaron exitosos. |
+| `gateway_retry_delay_seconds` | Histogram | `route`, `attempt` | Distribución de los delays entre reintentos. |
 
 #### Configuración del Módulo de Métricas
 En el archivo `gateway.yaml` se pueden configurar las siguientes propiedades bajo la clave global `metrics`:
@@ -378,9 +476,10 @@ routes:
 #### Levantando el Stack de Monitoreo Local
 El entorno de desarrollo preconfigurado en `docker/docker-compose.example.yml` incluye servicios listos para usar de **Prometheus** y **Grafana** autoaprovisionados:
 1. **Configuración de Raspado:** Prometheus está configurado para raspar automáticamente el endpoint `/metrics` del Gateway cada 5 segundos.
-2. **Dashboard Auto-Aprovisionado:** Grafana arranca con un dashboard preconfigurado interactivo llamado **Gateway Overview** que ofrece los siguientes 4 paneles esenciales:
+2. **Dashboard Auto-Aprovisionado:** Grafana arranca con un dashboard preconfigurado interactivo llamado **Gateway Overview** que ofrece los siguientes paneles esenciales:
    * **RPS (Requests por Segundo):** Muestra el volumen de tráfico actual y su evolución histórica.
    * **Latencia P95:** Visualiza el percentil 95 de duración de las peticiones por ruta para identificar cuellos de botella de rendimiento.
+   * **Estado del Circuit Breaker:** Gauge por ruta mostrando el estado actual (CLOSED/HALF_OPEN/OPEN).
    * **Distribución de Códigos HTTP:** Un gráfico de distribución que desglosa las respuestas en familias (`2xx`, `4xx`, `5xx`, etc.).
    * **Bloqueos por Rate Limit (Hits 429):** Monitorea las peticiones bloqueadas por rate limit en tiempo real.
 
@@ -438,7 +537,7 @@ Para mantener la estabilidad de la red y el sistema, los campos se clasifican en
 Cualquier cambio en las siguientes secciones estructurales no bloqueará la recarga de los campos aplicables, pero no surtirá efecto y emitirá una advertencia (`warn`) en los logs auditados indicando que **requieren un reinicio completo del Gateway**:
 * **`server.port` / `server.host`**: Requieren re-bind del socket TCP.
 * **`redis.url` / `redis.onFailure`**: Requieren reconectar o reconstruir la inicialización del plugin.
-* **`routes[].prefix` / `routes[].target` / `routes[].stripPrefix` / `routes[].timeout`**: Están inyectados en la inicialización estática del proxy inverso (`@fastify/http-proxy`).
+* **`routes[].prefix` / `routes[].target` / `routes[].stripPrefix` / `routes[].timeout`**: Están inyectados en la inicialización estática del proxy inverso (motor `Undici`).
 * **Agregar o eliminar rutas**: No se pueden desregistrar plugins dinámicamente en Fastify.
 
 ---
