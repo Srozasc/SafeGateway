@@ -87,8 +87,13 @@ export function buildServer(
   // 4. Crear el ConnectionPoolManager para los backends
   const poolManager = new ConnectionPoolManager(logger);
 
-  // 5. Crear el handler de proxy usando el pipeline
-  const proxyHandler = createProxyHandler(poolManager, logger);
+  // 5. Crear el handler de proxy usando el pipeline con sus lifecycle hooks
+  const proxyHandler = createProxyHandler(
+    poolManager,
+    logger,
+    pipeline.getLifecycleHooks(),
+    pipeline
+  );
 
   // 6. Registrar las rutas usando el preHandler del pipeline + proxy handler
   const sortedRoutes = [...finalSnapshotRef.current.config.routes].sort(

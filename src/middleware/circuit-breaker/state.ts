@@ -34,6 +34,7 @@ export class CircuitStateMachine {
 
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount: number = 0;
+  private consecutiveFailures: number = 0;
   private successCount: number = 0;
   private requestsInWindow: number = 0;
   private windowStartTime: number = Date.now();
@@ -91,8 +92,8 @@ export class CircuitStateMachine {
         this.transitionTo(CircuitState.CLOSED);
       }
     } else {
-      // Reset failure count on success in CLOSED
-      this.failureCount = 0;
+      // Reset consecutive failure count on success in CLOSED
+      this.consecutiveFailures = 0;
     }
 
     this.resetWindowIfNeeded();
@@ -106,6 +107,7 @@ export class CircuitStateMachine {
     this.totalFailures++;
     this.requestsInWindow++;
     this.failureCount++;
+    this.consecutiveFailures++;
     this.lastFailureTime = Date.now();
 
     if (this.state === CircuitState.HALF_OPEN) {
@@ -113,9 +115,9 @@ export class CircuitStateMachine {
       this.transitionTo(CircuitState.OPEN);
     } else if (this.state === CircuitState.CLOSED) {
       // Check consecutive failures threshold
-      if (this.failureCount >= 5) {
+      if (this.consecutiveFailures >= 5) {
         this.logger.warn(
-          { route: this.routePrefix, backend: this.backend, failures: this.failureCount },
+          { route: this.routePrefix, backend: this.backend, failures: this.consecutiveFailures },
           'Circuit breaker opened after 5 consecutive failures'
         );
         this.transitionTo(CircuitState.OPEN);
@@ -188,9 +190,11 @@ export class CircuitStateMachine {
     switch (newState) {
       case CircuitState.CLOSED:
         this.failureCount = 0;
+        this.consecutiveFailures = 0;
         this.successCount = 0;
         break;
       case CircuitState.OPEN:
+        this.lastFailureTime = Date.now();
         // Reset window for fresh start
         this.resetWindow();
         break;

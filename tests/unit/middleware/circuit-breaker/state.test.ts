@@ -1,15 +1,17 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 /**
  * Circuit Breaker State Machine Tests
  */
 
-import { CircuitState, CircuitStateMachine, CircuitBreakerRegistry } from '../../src/middleware/circuit-breaker/state.js';
+import { CircuitStateMachine, CircuitBreakerRegistry } from '../../../../src/middleware/circuit-breaker/state.js';
+import { CircuitState } from '../../../../src/middleware/circuit-breaker/types.js';
 import { Logger } from 'pino';
 
 const mockLogger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
 } as unknown as Logger;
 
 describe('CircuitStateMachine', () => {
@@ -59,11 +61,11 @@ describe('CircuitStateMachine', () => {
         mockLogger
       );
       // Record 6 failures out of 10 requests = 60% > 50%
-      for (let i = 0; i < 6; i++) {
-        machine2.recordFailure();
-        // Add success to complete the window
-        machine2.recordSuccess();
-      }
+      // 3 successes, 2 failures, 1 success (resets consecutive), 4 failures (10th request is failure)
+      for (let i = 0; i < 3; i++) machine2.recordSuccess();
+      for (let i = 0; i < 2; i++) machine2.recordFailure();
+      machine2.recordSuccess();
+      for (let i = 0; i < 4; i++) machine2.recordFailure();
       expect(machine2.getState()).toBe(CircuitState.OPEN);
     });
 
@@ -78,7 +80,7 @@ describe('CircuitStateMachine', () => {
   });
 
   describe('OPEN -> HALF_OPEN Transitions', () => {
-    it('should transition to HALF_OPEN after recovery time', () => {
+    it('should transition to HALF_OPEN after recovery time', async () => {
       // Open the circuit
       for (let i = 0; i < 5; i++) {
         machine.recordFailure();
@@ -98,7 +100,7 @@ describe('CircuitStateMachine', () => {
       expect(fastMachine.getState()).toBe(CircuitState.OPEN);
 
       // Wait for recovery time
-      jest.sleep(10);
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Request should transition to HALF_OPEN
       expect(fastMachine.canExecute()).toBe(true);
@@ -115,7 +117,7 @@ describe('CircuitStateMachine', () => {
   });
 
   describe('HALF_OPEN -> CLOSED/OPEN Transitions', () => {
-    it('should close after halfOpenRequests successful requests', () => {
+    it('should close after halfOpenRequests successful requests', async () => {
       const machine = new CircuitStateMachine(
         '/api/test',
         'http://test:8080',
@@ -130,7 +132,7 @@ describe('CircuitStateMachine', () => {
       expect(machine.getState()).toBe(CircuitState.OPEN);
 
       // Wait and trigger transition to HALF_OPEN
-      jest.sleep(10);
+      await new Promise(resolve => setTimeout(resolve, 10));
       machine.canExecute(); // This should transition
 
       expect(machine.getState()).toBe(CircuitState.HALF_OPEN);
@@ -144,7 +146,7 @@ describe('CircuitStateMachine', () => {
       expect(machine.getState()).toBe(CircuitState.CLOSED);
     });
 
-    it('should reopen on any failure in HALF_OPEN', () => {
+    it('should reopen on any failure in HALF_OPEN', async () => {
       const machine = new CircuitStateMachine(
         '/api/test',
         'http://test:8080',
@@ -156,7 +158,7 @@ describe('CircuitStateMachine', () => {
       for (let i = 0; i < 5; i++) {
         machine.recordFailure();
       }
-      jest.sleep(10);
+      await new Promise(resolve => setTimeout(resolve, 10));
       machine.canExecute();
 
       expect(machine.getState()).toBe(CircuitState.HALF_OPEN);
