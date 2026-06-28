@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { RouteMatch } from '../../../../src/routing/types.js';
+import { RouteConfig } from '../../../../src/config/types.js';
 import {
   extractHostname,
   resolveRouteLabel,
@@ -23,7 +24,7 @@ describe('Labels Metrics Helpers', () => {
     it('debería retornar "unmatched" si routeMatch es nulo o indefinido', () => {
       expect(resolveRouteLabel(null)).toBe('unmatched');
       expect(resolveRouteLabel(undefined)).toBe('unmatched');
-      expect(resolveRouteLabel({} as any)).toBe('unmatched');
+      expect(resolveRouteLabel({} as unknown as RouteMatch)).toBe('unmatched');
     });
 
     it('debería priorizar metricsLabel si está definido en la ruta', () => {
@@ -35,6 +36,7 @@ describe('Labels Metrics Helpers', () => {
         },
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveRouteLabel(mockRouteMatch)).toBe('users-service');
     });
@@ -47,6 +49,7 @@ describe('Labels Metrics Helpers', () => {
         },
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveRouteLabel(mockRouteMatch)).toBe('/products');
     });
@@ -55,9 +58,10 @@ describe('Labels Metrics Helpers', () => {
       const mockRouteMatch: RouteMatch = {
         route: {
           target: 'http://localhost:8080',
-        } as any,
+        } as unknown as RouteConfig,
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveRouteLabel(mockRouteMatch)).toBe('unmatched');
     });
@@ -67,7 +71,7 @@ describe('Labels Metrics Helpers', () => {
     it('debería retornar "unknown" si routeMatch es nulo o indefinido', () => {
       expect(resolveBackendLabel(null)).toBe('unknown');
       expect(resolveBackendLabel(undefined)).toBe('unknown');
-      expect(resolveBackendLabel({} as any)).toBe('unknown');
+      expect(resolveBackendLabel({} as unknown as RouteMatch)).toBe('unknown');
     });
 
     it('debería priorizar backendName si está definido en la ruta', () => {
@@ -79,6 +83,7 @@ describe('Labels Metrics Helpers', () => {
         },
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveBackendLabel(mockRouteMatch)).toBe('users-backend');
     });
@@ -91,6 +96,7 @@ describe('Labels Metrics Helpers', () => {
         },
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveBackendLabel(mockRouteMatch)).toBe('users-api-host');
     });
@@ -99,9 +105,10 @@ describe('Labels Metrics Helpers', () => {
       const mockRouteMatch: RouteMatch = {
         route: {
           prefix: '/users',
-        } as any,
+        } as unknown as RouteConfig,
         override: null,
         effectiveRateLimit: null,
+        effectiveCors: null,
       };
       expect(resolveBackendLabel(mockRouteMatch)).toBe('unknown');
     });

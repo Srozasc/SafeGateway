@@ -13,6 +13,7 @@
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "validate:mcp": "node scripts/validate-mcp-setup.mjs",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "docker:build": "docker build -f docker/Dockerfile -t gateway-http:latest ."

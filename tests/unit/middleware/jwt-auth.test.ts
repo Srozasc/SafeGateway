@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import pino from 'pino';
 import { SignJWT } from 'jose';
@@ -7,8 +7,8 @@ import { RequestContext } from '../../../src/middleware/pipeline.js';
 import { RouteMatch } from '../../../src/routing/types.js';
 
 describe('JwtAuthPlugin', () => {
-  let mockRequest: any;
-  let mockReply: any;
+  let mockRequest: FastifyRequest & { gatewayContext: NonNullable<FastifyRequest['gatewayContext']> };
+  let mockReply: Mocked<FastifyReply> & { body?: { message?: string; error?: string; statusCode?: number } };
   let mockRouteMatch: RouteMatch;
   const logger = pino({ level: 'silent' });
   const plugin = new JwtAuthPlugin(logger);
@@ -20,23 +20,23 @@ describe('JwtAuthPlugin', () => {
       url: '/api/users',
       headers: {},
       gatewayContext: {
-        routeMatch: null as any,
+        routeMatch: null as unknown as RouteMatch,
       },
-    };
+    } as unknown as FastifyRequest & { gatewayContext: NonNullable<FastifyRequest['gatewayContext']> };
 
     mockReply = {
       sent: false,
       statusCode: 200,
-      status(code: number) {
+      status(this: { statusCode: number }, code: number) {
         this.statusCode = code;
         return this;
       },
-      send: vi.fn<any>().mockImplementation(function (this: any, body: any) {
+      send: vi.fn().mockImplementation(function (this: { sent: boolean; body: unknown }, body: unknown) {
         this.sent = true;
         this.body = body;
         return this;
       }),
-    } as any;
+    } as unknown as Mocked<FastifyReply> & { body?: { message?: string; error?: string; statusCode?: number } };
 
     mockRouteMatch = {
       route: {
@@ -51,6 +51,7 @@ describe('JwtAuthPlugin', () => {
       },
       override: null,
       effectiveRateLimit: null,
+      effectiveCors: null,
     };
 
     mockRequest.gatewayContext.routeMatch = mockRouteMatch;
@@ -58,7 +59,7 @@ describe('JwtAuthPlugin', () => {
 
   // Auxiliar para firmar tokens JWT en los tests usando jose
   async function generateToken(
-    payload: any,
+    payload: Record<string, unknown>,
     secret: string = SECRET_KEY,
     algorithm: string = 'HS256',
     expiration: string | number = '2h',
@@ -131,7 +132,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body.message).toBe('Token de autenticación requerido.');
+    expect(mockReply.body?.message).toBe('Token de autenticación requerido.');
   });
 
   it('debería retornar HTTP 401 si el token tiene una firma inválida', async () => {
@@ -151,7 +152,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body.message).toBe('Token de autenticación inválido o expirado.');
+    expect(mockReply.body?.message).toBe('Token de autenticación inválido o expirado.');
   });
 
   it('debería retornar HTTP 401 si el token está expirado', async () => {
@@ -169,7 +170,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body.message).toBe('Token de autenticación inválido o expirado.');
+    expect(mockReply.body?.message).toBe('Token de autenticación inválido o expirado.');
   });
 
   it('debería retornar HTTP 401 si el token usa un algoritmo diferente al configurado', async () => {
@@ -204,8 +205,8 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(false);
     expect(mockRequest.gatewayContext.jwtClaims).toBeDefined();
-    expect(mockRequest.gatewayContext.jwtClaims.sub).toBe('user-123');
-    expect(mockRequest.gatewayContext.jwtClaims.role).toBe('admin');
+    expect(mockRequest.gatewayContext.jwtClaims!.sub).toBe('user-123');
+    expect(mockRequest.gatewayContext.jwtClaims!.role).toBe('admin');
 
     // Comprobar inyección de cabeceras en lowercase
     expect(mockRequest.headers['x-jwt-claim-sub']).toBe('user-123');

@@ -123,7 +123,7 @@ export function buildServer(
   }
 
   // 7. Almacenar el poolManager para poder cerrarlo en shutdown
-  (server as any).poolManager = poolManager;
+  (server as unknown as { poolManager: typeof poolManager }).poolManager = poolManager;
 
   return server;
 }

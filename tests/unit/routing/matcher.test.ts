@@ -8,6 +8,7 @@ describe('Route Matcher & Registry', () => {
     server: { port: 3000, host: '0.0.0.0' },
     redis: { url: 'redis://localhost:6379' },
     logging: { level: 'info' },
+    metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
     routes: [
       {
         prefix: '/api',

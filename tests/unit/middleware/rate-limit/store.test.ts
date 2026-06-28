@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { RedisRateLimitStore } from '../../../../src/middleware/rate-limit/store.js';
 
 describe('RedisRateLimitStore', () => {
   const mockIncr = vi.fn();
   const mockExpire = vi.fn();
-  const mockExec = vi.fn<() => Promise<any>>();
+  const mockExec = vi.fn();
 
   // Mock de ioredis pipeline
   const mockPipeline = {
@@ -48,7 +48,7 @@ describe('RedisRateLimitStore', () => {
     const store = new RedisRateLimitStore(mockRedis);
     const key = 'ratelimit:127.0.0.1:/api:1763114400';
 
-    mockExec.mockResolvedValue(null as any);
+    mockExec.mockResolvedValue(null);
 
     await expect(store.increment(key, 60)).rejects.toThrow(
       'La transacción del rate limiter en Redis no devolvió resultados.',
@@ -59,7 +59,7 @@ describe('RedisRateLimitStore', () => {
     const store = new RedisRateLimitStore(mockRedis);
     const key = 'ratelimit:127.0.0.1:/api:1763114400';
 
-    mockExec.mockResolvedValue([] as any); // Array vacío
+    mockExec.mockResolvedValue([]); // Array vacío
 
     await expect(store.increment(key, 60)).rejects.toThrow(
       'El comando INCR en la transacción de Redis no devolvió respuesta.',

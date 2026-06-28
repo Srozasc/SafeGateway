@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from 'fastify';
 import { buildErrorResponse } from './responses.js';
 import { RouteNotFoundError } from './types.js';
 
@@ -10,7 +10,7 @@ import { RouteNotFoundError } from './types.js';
  */
 export function registerErrorHandler(fastify: FastifyInstance): void {
   // 1. Manejador de errores global
-  fastify.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+  fastify.setErrorHandler((error: FastifyError & { status?: number }, request: FastifyRequest, reply: FastifyReply) => {
     // Si es un error de validación de Fastify/Zod, forzar un statusCode de 400
     if (error.validation) {
       error.statusCode = 400;

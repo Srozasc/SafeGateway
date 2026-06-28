@@ -1,6 +1,7 @@
 import type { RouteRegistry } from '../routing/registry.js';
 import type { RouteMatch } from '../routing/types.js';
 import type { JWTPayload } from 'jose';
+import type { CorsDecision } from '../middleware/cors/types.js';
 
 export interface ServerConfig {
   port: number;
@@ -51,6 +52,21 @@ export interface CircuitBreakerConfig {
   retryMaxDelayMs: number;
 }
 
+export interface CorsConfig {
+  enabled?: boolean;
+  origins?: string[];
+  methods?: string[];
+  allowedHeaders?: string[];
+  exposedHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
+}
+
+export interface CorsOverrideConfig {
+  path: string;
+  cors: CorsConfig;
+}
+
 export interface RouteConfig {
   prefix: string;
   target: string;
@@ -62,6 +78,7 @@ export interface RouteConfig {
   backendName?: string;
   retryableMethods?: string[];
   circuitBreaker?: CircuitBreakerConfig;
+  cors?: CorsConfig;
 }
 
 export interface OverrideConfig {
@@ -76,11 +93,14 @@ export interface GatewayConfig {
   metrics: MetricsConfig;
   routes: RouteConfig[];
   overrides?: OverrideConfig[];
+  cors?: CorsConfig;
+  corsOverrides?: CorsOverrideConfig[];
 }
 
 export interface GatewayContext {
   routeMatch: RouteMatch;
   jwtClaims?: JWTPayload;
+  corsDecision?: CorsDecision;
 }
 
 export interface ConfigSnapshot {

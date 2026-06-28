@@ -7,8 +7,26 @@
  */
 
 import { Logger } from 'pino';
+import type { FastifyRequest } from 'fastify';
 import type { GatewayPlugin, RequestContext, ResponseContext } from '../pipeline.js';
 import type { ProxyLifecycleHooks, ProxyContext, ProxyError, ProxyResponseData } from '../../proxy/types.js';
+
+interface RequestWithCircuitContext extends FastifyRequest {
+  circuitRetryContext?: {
+    attempt: number;
+    maxAttempts: number;
+    routeKey: string;
+    backend: string;
+    method: string;
+    circuit: unknown;
+    lastError?: string;
+  };
+  circuitRetryInfo?: {
+    shouldRetry: boolean;
+    attempt: number;
+    error: ProxyError;
+  };
+}
 import {
   CircuitState,
   CircuitBreakerConfig,
@@ -101,7 +119,8 @@ export class CircuitBreakerPlugin implements GatewayPlugin {
     }
 
     // Store retry context for later use in onError
-    (context.request as any).circuitRetryContext = {
+    const request = context.request as RequestWithCircuitContext;
+    request.circuitRetryContext = {
       attempt: 0,
       maxAttempts: (routeConfig.circuitBreaker?.maxRetries ?? this.config.retryConfig.maxRetries) + 1,
       routeKey,
@@ -157,7 +176,8 @@ export class CircuitBreakerPlugin implements GatewayPlugin {
     circuit.recordFailure();
 
     // Get retry context from request
-    const retryContext = (context.request as any).circuitRetryContext;
+    const request = context.request as RequestWithCircuitContext;
+    const retryContext = request.circuitRetryContext;
     if (!retryContext) {
       return;
     }
@@ -186,7 +206,7 @@ export class CircuitBreakerPlugin implements GatewayPlugin {
     }
 
     // Store retry info for the proxy to handle
-    (context.request as any).circuitRetryInfo = {
+    request.circuitRetryInfo = {
       shouldRetry: true,
       attempt: retryContext.attempt,
       error,
@@ -198,7 +218,7 @@ export class CircuitBreakerPlugin implements GatewayPlugin {
    */
   private shouldRetry(
     error: ProxyError,
-    retryContext: { method: string; attempts: number; maxAttempts: number }
+    retryContext: { method: string; attempt: number; maxAttempts: number }
   ): boolean {
     // Check if method is idempotent
     if (!isRetryableMethod(retryContext.method)) {

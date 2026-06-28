@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterAll, MockInstance } from 'vitest';
 import pino, { Logger } from 'pino';
 import { ConfigReloader } from '../../../src/config/reloader.js';
 import { RouteRegistry } from '../../../src/routing/registry.js';
@@ -7,8 +7,8 @@ import { ConfigSnapshot, GatewayConfig } from '../../../src/config/types.js';
 
 describe('ConfigReloader Unit Tests', () => {
   const originalEnv = { ...process.env };
-  let existsSpy: vi.SpiedFunction<typeof fs.existsSync>;
-  let readSpy: vi.SpiedFunction<typeof fs.readFileSync>;
+  let existsSpy: MockInstance<typeof fs.existsSync>;
+  let readSpy: MockInstance<typeof fs.readFileSync>;
   let logger: Logger;
   let snapshotRef: { current: ConfigSnapshot };
 
@@ -16,6 +16,7 @@ describe('ConfigReloader Unit Tests', () => {
     server: { port: 3000, host: '0.0.0.0' },
     redis: { url: 'redis://localhost:6379', onFailure: 'open' },
     logging: { level: 'info' },
+    metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
     routes: [
       {
         prefix: '/api',
@@ -30,8 +31,8 @@ describe('ConfigReloader Unit Tests', () => {
     vi.resetAllMocks();
     process.env = { ...originalEnv };
 
-    existsSpy = vi.spyOn(fs, 'existsSync') as vi.SpiedFunction<typeof fs.existsSync>;
-    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as vi.SpiedFunction<
+    existsSpy = vi.spyOn(fs, 'existsSync') as MockInstance<typeof fs.existsSync>;
+    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as MockInstance<
       typeof fs.readFileSync
     >;
 
@@ -69,7 +70,7 @@ routes:
       windowSeconds: 60
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(updatedYaml as any);
+    readSpy.mockReturnValue(updatedYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -103,7 +104,7 @@ overrides:
       windowSeconds: 60
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(updatedYaml as any);
+    readSpy.mockReturnValue(updatedYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -141,7 +142,7 @@ routes:
       connect: 5000 # Nuevo (no recargable)
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(updatedYaml as any);
+    readSpy.mockReturnValue(updatedYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -176,7 +177,7 @@ routes:
       windowSeconds: 60
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(originalYaml as any);
+    readSpy.mockReturnValue(originalYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -187,7 +188,7 @@ routes:
 
   it('debería fallar la recarga y mantener el snapshot anterior si el archivo es inválido', async () => {
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue('invalid-yaml-broken: { { {' as any); // YAML roto
+    readSpy.mockReturnValue('invalid-yaml-broken: { { {' as unknown as ReturnType<typeof fs.readFileSync>); // YAML roto
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -206,7 +207,7 @@ redis:
 routes: [] # No vacío
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(invalidYaml as any);
+    readSpy.mockReturnValue(invalidYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
     const result = await reloader.reload();
@@ -234,7 +235,7 @@ routes:
       windowSeconds: 60
 `;
     existsSpy.mockReturnValue(true);
-    readSpy.mockReturnValue(updatedYaml as any);
+    readSpy.mockReturnValue(updatedYaml as unknown as ReturnType<typeof fs.readFileSync>);
 
     const reloader = new ConfigReloader('config.yaml', snapshotRef, logger);
 

@@ -30,7 +30,7 @@ const HTTP_STATUS_TEXTS: Record<number, string> = {
  * @returns Estructura de respuesta estandarizada.
  */
 export function buildErrorResponse(
-  error: any,
+  error: Error & { statusCode?: number; status?: number },
   requestId?: string,
   timestamp: string = new Date().toISOString(),
 ): ErrorResponse {

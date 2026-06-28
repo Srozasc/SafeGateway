@@ -14,7 +14,30 @@
       "Bash(node -e \"import\\(''vitest''\\).then\\(v => console.log\\(''before'' in v, ''describe'' in v\\)\\)\")",
       "Bash(node --experimental-vm-modules node_modules/vitest/vitest.mjs run tests/integration/proxy.test.ts)",
       "Bash(node -e \":*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(pnpm validate:mcp)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm view:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(claude:*)",
+      "WebSearch",
+      "mcp__obsidian__get_vault_stats",
+      "mcp__obsidian__write_note",
+      "Bash(pnpm exec *)",
+      "Bash(rm -f /tmp/cors-debug.log 2>&1 || true; pnpm exec vitest run tests/integration/cors.test.ts -t \"wildcard\" --reporter=verbose 2>&1 | tail -5; echo \"=== LOG ===\"; cat /tmp/cors-debug.log 2>/dev/null || echo \"no log file\")",
+      "Read(//tmp/**)",
+      "Bash(node -e \"console.log\\(require\\('os'\\).tmpdir\\(\\)\\)\")",
+      "Bash(rm -f /c/Users/ASUSTU~1/AppData/Local/Temp/cors-debug.log 2>&1 || true; pnpm exec vitest run tests/integration/cors.test.ts -t \"wildcard\" --reporter=verbose 2>&1 | tail -5; echo \"=== LOG ===\"; cat /c/Users/ASUSTU~1/AppData/Local/Temp/cors-debug.log 2>/dev/null || echo \"no log file\")",
+      "Read(//c/Users/ASUSTU~1/AppData/Local/Temp/**)",
+      "Bash(rm -f /c/Users/ASUSTU~1/AppData/Local/Temp/cors-debug.log; pnpm exec vitest run tests/integration/cors.test.ts --reporter=verbose 2>&1 | tail -30)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test:coverage)",
+      "Bash(pnpm test:coverage --reporter=text)"
+    ],
+    "additionalDirectories": [
+      "\\tmp",
+      "C:\\Users\\ASUSTU~1\\AppData\\Local\\Temp"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

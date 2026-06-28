@@ -49,3 +49,13 @@ Thumbs.db
 # Temporales/Historial de Gemini/Antigravity
 .gemini/
 .agent/
+
+# Config local de Obsidian (app) dentro del vault compartido .brain/
+# El contenido (notas .md) sí se commitea; solo se ignora la config de la app
+.brain/.obsidian/
+.brain/.trash/
+
+# Archivos temporales locales de desarrollo
+scratch/
+.mcp.json
+

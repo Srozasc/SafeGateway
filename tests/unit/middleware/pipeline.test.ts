@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import {
   MiddlewarePipeline,
@@ -9,27 +9,28 @@ import {
 import { RouteMatch } from '../../../src/routing/types.js';
 
 describe('MiddlewarePipeline', () => {
-  let mockRequest: vi.Mocked<FastifyRequest>;
-  let mockReply: vi.Mocked<FastifyReply>;
+  let mockRequest: Mocked<FastifyRequest>;
+  let mockReply: Mocked<FastifyReply>;
   let mockRouteMatch: RouteMatch;
 
   beforeEach(() => {
     mockRequest = {
       headers: {},
-    } as any;
+    } as unknown as Mocked<FastifyRequest>;
 
     mockReply = {
       sent: false,
-      send: vi.fn<any>().mockImplementation(function (this: any) {
+      send: vi.fn().mockImplementation(function (this: { sent: boolean }) {
         this.sent = true;
         return this;
       }),
-    } as any;
+    } as unknown as Mocked<FastifyReply>;
 
     mockRouteMatch = {
       route: { prefix: '/api', target: 'http://localhost' },
       override: null,
       effectiveRateLimit: null,
+      effectiveCors: null,
     };
   });
 
@@ -189,7 +190,7 @@ describe('MiddlewarePipeline', () => {
     });
 
     it('debería ejecutar el pipeline si request.gatewayContext está presente', async () => {
-      const onRequestSpy = vi.fn<any>();
+      const onRequestSpy = vi.fn<(context: RequestContext) => Promise<void>>().mockResolvedValue(undefined);
       const plugin: GatewayPlugin = {
         name: 'test-plugin',
         onRequest: onRequestSpy,

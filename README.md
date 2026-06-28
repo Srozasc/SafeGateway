@@ -9,10 +9,11 @@ Un API Gateway robusto, modular, configurable e inmutable desarrollado en **Type
 * **Proxy Inverso de Alto Rendimiento (Undici)**: Motor de proxy implementado sobre [Undici](https://undici.nodejs.org/), el cliente HTTP nativo de Node.js. Soporta reescritura de rutas (`stripPrefix`), timeouts de conexión/cabecera/cuerpo de forma granular e inyección de cabeceras de forwarding estándar (`X-Forwarded-*`).
 * **Circuit Breaker & Retries**: Patrón de circuit breaker con máquina de estados (CLOSED → OPEN → HALF_OPEN) y reintentos automáticos con *exponential backoff* y *full jitter* para proteger los backends de sobrecargas y fallas en cascada.
 * **Rate Limiting Distribuido**: Algoritmo *Fixed Window Counter* atómico implementado sobre **Redis** (usando pipelines optimizados) para restringir peticiones por IP, con soporte para comportamientos configurables ante caídas del caché (*fail-open* / *fail-closed*).
+* **Manejo de CORS Centralizado**: Política configurable de orígenes, métodos, headers y credenciales por ruta, con tres niveles de precedencia (`corsOverrides[path]` > `routes[].cors` > `cors` global). Los preflights se responden automáticamente con HTTP 204 sin pasar por rate-limit, auth ni circuit breaker.
 * **Priorización de Enrutamiento en Cascada**: Resolución inteligente de coincidencia de rutas (Rutas específicas/Overrides > Prefijo más largo > Prefijo general).
 * **Configuración Declarativa Inmutable**: Lector de archivos YAML/JSON con validación estricta de esquemas mediante **Zod** y soporte para interpolación segura de variables de entorno (`${ENV_VAR}`).
 * **Registro de Logs Estructurados**: Integración nativa de **Pino** con serializadores de peticiones, respuestas y errores redactando automáticamente información sensible (tokens `Authorization`, cookies, etc.).
-* **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onAfterResponse` y `onError` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
+* **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onBeforeResponse`, `onAfterResponse` y `onError` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
 * **Despliegue Contenerizado**: Optimizado mediante una compilación Docker *multi-stage* ultra-ligera (basada en `node:20-alpine`) e instrumentado con chequeos de salud (`HEALTHCHECK`) nativos de red.
 
 ---
@@ -168,6 +169,67 @@ overrides:
       maxRequests: 5      # Aplica un límite mucho más restrictivo para evitar ataques de fuerza bruta
       windowSeconds: 60
 ```
+
+### 🌐 Configuración de CORS (Cross-Origin Resource Sharing)
+
+El Gateway incluye un módulo CORS configurable con tres niveles de precedencia (de mayor a menor):
+
+1. **`corsOverrides[path]`** — Override exacto por path (path-exact)
+2. **`routes[].cors`** — Override parcial por prefijo de ruta
+3. **`cors` global** — Política por defecto aplicada a todas las rutas
+
+```yaml
+# ─── CORS global (default para todas las rutas) ───
+cors:
+  enabled: true                    # Habilita CORS (default: false)
+  origins:                         # Lista de orígenes permitidos
+    - "https://app.flashdrop.cl"
+    - "https://admin.flashdrop.cl"
+  methods:                         # Métodos HTTP permitidos
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - PATCH
+    - OPTIONS
+  allowedHeaders:                  # Headers que el cliente puede enviar
+    - Content-Type
+    - Authorization
+  exposedHeaders:                  # Headers expuestos al cliente (no en preflights)
+    - X-Request-ID
+  credentials: false               # Permitir cookies/Authorization (true requiere origins específicos)
+  maxAge: 86400                    # Cache de preflight en segundos (24h default)
+
+routes:
+  # Ruta general hereda config global
+  - prefix: /api
+    target: http://backend:3000
+
+  # Override por prefijo: solo origins=["*"] para esta ruta
+  - prefix: /api/dev
+    target: http://backend-dev:3000
+    cors:
+      origins: ["*"]
+
+# Override exacto por path: mayor prioridad
+corsOverrides:
+  - path: /api/auth/login
+    cors:
+      origins: ["*"]
+      credentials: false
+```
+
+**Validación al startup** (fail-fast, rollback automático en hot-reload):
+- ❌ `enabled: true` con `origins: []` — requiere al menos un origin
+- ❌ `credentials: true` con `origins: ["*"]` — incompatible con wildcard
+- ❌ `credentials: true` con `allowedHeaders: ["*"]` — incompatible
+
+**Comportamiento clave**:
+- **Preflight** (`OPTIONS` con `Origin` permitido) → responde `204` sin pasar al backend
+- **Request normal con Origin permitido** → pasa al backend, headers CORS se agregan en la respuesta
+- **Request normal con Origin NO permitido** → pasa al backend sin headers CORS (decisión del cliente)
+- **Request sin `Origin`** → server-to-server, no se afecta
+- **Comparación de origines**: case-insensitive sobre `scheme + host + port` (normalizado a lowercase)
 
 ### 💡 Interpolación de Variables de Entorno
 Cualquier campo del archivo YAML puede contener expresiones del tipo `${NOMBRE_VARIABLE}`. El Gateway las reemplazará automáticamente en tiempo de arranque utilizando los valores de `process.env`. Si una variable requerida en el YAML no está definida en el entorno, el Gateway **fallará rápido** lanzando una excepción `MissingEnvVarError` para evitar arranques inconsistentes.
@@ -440,6 +502,24 @@ El API Gateway incluye soporte nativo y de alto rendimiento para la recolección
 | `gateway_http_requests_in_flight` | Gauge | `method`, `route` | Cantidad actual de peticiones siendo procesadas de forma concurrente. |
 | `gateway_rate_limit_hits_total` | Counter | `route` | Cantidad de peticiones rechazadas con código `429 (Too Many Requests)` por rate limit. |
 
+#### Métricas de CORS
+| Métrica | Tipo | Etiquetas | Descripción |
+| :--- | :--- | :--- | :--- |
+| `gateway_cors_requests_total` | Counter | `decision` | Total de peticiones procesadas por el plugin CORS. Valores posibles (`decision`): `allowed`, `blocked`, `preflight`, `no_origin`. Cardinalidad baja (4 valores). |
+
+**Consultas PromQL útiles:**
+```promql
+# Tasa de preflights
+rate(gateway_cors_requests_total{decision="preflight"}[5m])
+
+# Tasa de orígenes bloqueados
+rate(gateway_cors_requests_total{decision="blocked"}[5m])
+
+# % de requests con header Origin (i.e., desde un navegador)
+sum(rate(gateway_cors_requests_total{decision=~"allowed|blocked|preflight"}))
+  / sum(rate(gateway_cors_requests_total))
+```
+
 #### Métricas del Circuit Breaker
 | Métrica | Tipo | Etiquetas | Descripción |
 | :--- | :--- | :--- | :--- |
@@ -530,6 +610,9 @@ Para mantener la estabilidad de la red y el sistema, los campos se clasifican en
 
 #### ⚡ Campos Recargables en Caliente (Se aplican inmediatamente)
 * **`routes[].rateLimit` (`maxRequests`, `windowSeconds`)**: Los límites de tasa se reajustan dinámicamente y se aplican a los nuevos requests. **Los contadores vigentes en Redis se preservan intactos**.
+* **`routes[].cors`**: Cambios en la política CORS por ruta (orígenes, métodos, headers) se aplican sin reiniciar.
+* **`cors` (global)**: Cambios en la política CORS global se aplican inmediatamente a todas las rutas que no tengan override.
+* **`corsOverrides`**: Añadir, modificar o remover overrides CORS por path exacto.
 * **`overrides` (excepciones de endpoints)**: Permite añadir, modificar o remover overrides específicos de rate limit sobre paths exactos.
 * **`logging.level`**: Modifica en caliente el nivel del logger dinámicamente en Pino (`logger.level = nuevoLevel`) sin reiniciar.
 

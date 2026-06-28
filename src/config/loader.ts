@@ -9,6 +9,8 @@ import {
   ConfigValidationError,
   MissingEnvVarError,
 } from '../errors/types.js';
+import { validateCorsCombination } from '../middleware/cors/origins.js';
+import { applyDefaults } from '../middleware/cors/merge.js';
 
 // Helper recursivo para congelar objetos y asegurar inmutabilidad
 function deepFreeze<T>(obj: T): Readonly<T> {
@@ -80,6 +82,16 @@ export function loadConfig(configPathOverride?: string): Readonly<GatewayConfig>
     throw new ConfigValidationError(errorDetails);
   }
 
-  // 5. Devolver la configuración congelada de forma inmutable
-  return deepFreeze(result.data as GatewayConfig);
+  // 5. Validar combinaciones CORS inválidas (solo para el config global)
+  const config = result.data as GatewayConfig;
+  if (config.cors) {
+    const mergedGlobal = applyDefaults(config.cors);
+    const validationError = validateCorsCombination(mergedGlobal);
+    if (validationError) {
+      throw new ConfigValidationError([validationError]);
+    }
+  }
+
+  // 6. Devolver la configuración congelada de forma inmutable
+  return deepFreeze(config);
 }

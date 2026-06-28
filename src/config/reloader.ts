@@ -163,6 +163,26 @@ export class ConfigReloader {
       applied.push('overrides');
     }
 
+    // --- Sección CORS global ---
+    if (JSON.stringify(oldConfig.cors) !== JSON.stringify(newConfig.cors)) {
+      applied.push('cors');
+    }
+
+    // --- Sección corsOverrides (path-exact) ---
+    if (JSON.stringify(oldConfig.corsOverrides) !== JSON.stringify(newConfig.corsOverrides)) {
+      applied.push('corsOverrides');
+    }
+
+    // --- Sección CORS por ruta ---
+    for (let i = 0; i < minLength; i++) {
+      const oldRoute = oldConfig.routes[i]!;
+      const newRoute = newConfig.routes[i]!;
+
+      if (JSON.stringify(oldRoute.cors) !== JSON.stringify(newRoute.cors)) {
+        applied.push(`routes[${i}].cors`);
+      }
+    }
+
     return { applied, ignored };
   }
 }

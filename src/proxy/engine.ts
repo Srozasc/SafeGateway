@@ -4,7 +4,7 @@ import { Pool } from 'undici';
 import { Logger } from 'pino';
 import type { RouteMatch } from '../routing/types.js';
 import { ConnectionPoolManager } from './pool.js';
-import type { ProxyLifecycleHooks, ProxyContext, ProxyError } from './types.js';
+import type { ProxyLifecycleHooks, ProxyContext, ProxyError, ProxyTimeoutConfig } from './types.js';
 import {
   buildProxyContext,
   createProxyError,
@@ -65,12 +65,17 @@ export class ProxyEngine {
     (forwardingHeaders as Record<string, string>)['x-request-id'] = requestId;
 
     // Get timeout config
-    const timeout = (route as any).timeout ?? this.defaultTimeout;
+    const routeTimeout = route.timeout;
+    const timeout: ProxyTimeoutConfig = {
+      connect: routeTimeout?.connect ?? this.defaultTimeout.connect,
+      headers: routeTimeout?.headers ?? this.defaultTimeout.headers,
+      body: routeTimeout?.body ?? this.defaultTimeout.body,
+    };
 
     // Build proxy headers
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(request.headers as Record<string, string | string[] | undefined>)) {
-      if (value === undefined) continue;
+      if (value === undefined) {continue;}
       headers[key] = Array.isArray(value) ? value.join(', ') : value;
     }
 
@@ -168,7 +173,7 @@ export class ProxyEngine {
       : undefined;
 
     return pool.request({
-      method: options.method as any,
+      method: options.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD',
       path: options.path,
       headers: options.headers,
       bodyTimeout: maxTimeout,

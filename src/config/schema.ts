@@ -103,6 +103,35 @@ export const CircuitBreakerConfigSchema = z.object({
     .default(5000),
 });
 
+// Esquema para CORS
+// NOTA: Todos los campos son opcionales para permitir overrides parciales
+// (e.g., una ruta puede especificar solo `origins: ["*"]` y heredar el resto del global).
+// Los defaults se aplican en `mergeCorsConfigs` (src/middleware/cors/merge.ts)
+// DESPUÉS de mergear, no a nivel de schema.
+// La validación de combinaciones inválidas (credentials + *, enabled + [])
+// se hace en `validateMergedCorsConfig`.
+export const CorsConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  origins: z.array(z.string().min(1, 'Cada origin debe ser un string no vacío')).optional(),
+  methods: z.array(z.string().min(1)).optional(),
+  allowedHeaders: z.array(z.string().min(1)).optional(),
+  exposedHeaders: z.array(z.string().min(1)).optional(),
+  credentials: z.boolean().optional(),
+  maxAge: z.number().int().positive('maxAge debe ser positivo').optional(),
+});
+
+// Esquema para override de CORS por path exacto
+export const CorsOverrideConfigSchema = z.object({
+  path: z
+    .string()
+    .refine((val) => val.startsWith('/'), 'El path del override CORS debe comenzar con "/"')
+    .refine(
+      (val) => val === '/' || !val.endsWith('/'),
+      'El path del override CORS no debe terminar con "/" (excepto si es la raíz "/")',
+    ),
+  cors: CorsConfigSchema,
+});
+
 // Esquema para las rutas del Gateway
 export const RouteConfigSchema = z.object({
   prefix: z
@@ -131,6 +160,8 @@ export const RouteConfigSchema = z.object({
     .optional(),
   // --- Circuit Breaker ---
   circuitBreaker: CircuitBreakerConfigSchema.optional(),
+  // --- CORS por ruta ---
+  cors: CorsConfigSchema.optional(),
 });
 
 // Esquema para los overrides
@@ -169,4 +200,8 @@ export const GatewayConfigSchema = z.object({
   metrics: MetricsConfigSchema,
   routes: z.array(RouteConfigSchema).min(1, 'Debe haber al menos una ruta configurada'),
   overrides: z.array(OverrideConfigSchema).optional(),
+  // --- CORS global ---
+  cors: CorsConfigSchema.optional(),
+  // --- CORS overrides por path exacto ---
+  corsOverrides: z.array(CorsOverrideConfigSchema).optional(),
 });

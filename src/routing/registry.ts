@@ -1,9 +1,12 @@
-import { GatewayConfig, RouteConfig, OverrideConfig } from '../config/types.js';
+import { GatewayConfig, RouteConfig, OverrideConfig, CorsConfig } from '../config/types.js';
 import { RouteMatch } from './types.js';
+import { mergeCorsConfigs } from '../middleware/cors/merge.js';
 
 export class RouteRegistry {
   private readonly routes: RouteConfig[];
   private readonly overrides: Map<string, OverrideConfig>;
+  private readonly corsOverrides: Map<string, CorsConfig>;
+  private readonly globalCors: CorsConfig | undefined;
 
   constructor(config: GatewayConfig) {
     // Ordenar las rutas por longitud de prefijo de forma descendente (el prefijo más largo primero)
@@ -17,6 +20,17 @@ export class RouteRegistry {
         this.overrides.set(override.path, override);
       }
     }
+
+    // CORS path-exact overrides (corsOverrides[])
+    this.corsOverrides = new Map<string, CorsConfig>();
+    if (config.corsOverrides) {
+      for (const override of config.corsOverrides) {
+        this.corsOverrides.set(override.path, override.cors);
+      }
+    }
+
+    // CORS global (puede ser undefined)
+    this.globalCors = config.cors;
   }
 
   /**
@@ -30,10 +44,13 @@ export class RouteRegistry {
     // 1. Limpiar el path removiendo query params
     const pathWithoutQuery = url.split('?')[0] || '/';
 
-    // 2. Buscar override exacto
+    // 2. Buscar override exacto (rate-limit)
     const override = this.overrides.get(pathWithoutQuery) || null;
 
-    // 3. Buscar la ruta correspondiente por prefijo
+    // 3. Buscar override exacto de CORS
+    const corsOverride = this.corsOverrides.get(pathWithoutQuery) || null;
+
+    // 4. Buscar la ruta correspondiente por prefijo
     // Como las rutas están ordenadas de mayor a menor longitud, la primera coincidencia es la más específica
     const route = this.routes.find((r) => {
       if (r.prefix === '/') {
@@ -59,10 +76,20 @@ export class RouteRegistry {
     // Prioridad: 1. Override Rate Limit, 2. Route Rate Limit, 3. null (sin límite)
     const effectiveRateLimit = override ? override.rateLimit : route.rateLimit || null;
 
+    // Determinar el CORS efectivo
+    // Prioridad (mayor a menor): corsOverrides[path] > route.cors > globalCors
+    // mergeCorsConfigs itera y asigna, así que pasamos de menor a mayor prioridad
+    // para que el último argumento (mayor prioridad) gane.
+    const effectiveCors =
+      corsOverride || route.cors || this.globalCors
+        ? mergeCorsConfigs(this.globalCors, route.cors, corsOverride)
+        : null;
+
     return {
       route,
       override,
       effectiveRateLimit,
+      effectiveCors,
     };
   }
 
@@ -81,6 +108,13 @@ export class RouteRegistry {
   }
 
   /**
+   * Obtiene el mapa interno de corsOverrides (útil para inspección y debugging).
+   */
+  public getCorsOverrides(): ReadonlyMap<string, CorsConfig> {
+    return this.corsOverrides;
+  }
+
+  /**
    * Obtiene todos los matches de rutas ordenados de más específico a menos específico.
    * Útil para registrar todas las rutas en el servidor.
    */
@@ -89,6 +123,7 @@ export class RouteRegistry {
       route,
       override: this.overrides.get(route.prefix) || null,
       effectiveRateLimit: route.rateLimit || null,
+      effectiveCors: route.cors || this.globalCors ? mergeCorsConfigs(this.globalCors, route.cors) : null,
     }));
   }
 }

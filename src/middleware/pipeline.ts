@@ -31,6 +31,7 @@ export interface GatewayPlugin {
   name: string;
   onRequest?(context: RequestContext): Promise<void>;
   onResponse?(context: ResponseContext): Promise<void>;
+  getLifecycleHooks?(): ProxyLifecycleHooks;
 }
 
 export class MiddlewarePipeline {
@@ -47,8 +48,8 @@ export class MiddlewarePipeline {
    */
   private collectLifecycleHooks(): void {
     for (const plugin of this.plugins) {
-      if ('getLifecycleHooks' in plugin && typeof plugin.getLifecycleHooks === 'function') {
-        const hooks = (plugin as any).getLifecycleHooks();
+      if (plugin.getLifecycleHooks) {
+        const hooks = plugin.getLifecycleHooks();
         this.lifecycleHooks = {
           ...this.lifecycleHooks,
           ...hooks,

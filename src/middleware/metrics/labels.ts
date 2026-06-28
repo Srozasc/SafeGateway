@@ -10,7 +10,7 @@ export function extractHostname(targetUrl: string): string {
   try {
     const parsed = new URL(targetUrl);
     return parsed.hostname;
-  } catch (error) {
+  } catch (_error) {
     return 'unknown';
   }
 }

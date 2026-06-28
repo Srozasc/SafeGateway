@@ -1,5 +1,6 @@
 import { jwtVerify } from 'jose';
 import { Logger } from 'pino';
+import type { FastifyRequest } from 'fastify';
 import { GatewayPlugin, RequestContext } from '../pipeline.js';
 import { type JwtAuthConfig, JWT_CLAIM_HEADER_PREFIX, DEFAULT_FORWARD_CLAIMS } from './types.js';
 
@@ -77,7 +78,7 @@ export class JwtAuthPlugin implements GatewayPlugin {
   /**
    * Extrae el token JWT del header Authorization (Bearer <token>).
    */
-  private extractBearerToken(request: any): string | null {
+  private extractBearerToken(request: FastifyRequest): string | null {
     const authHeader = request.headers['authorization'];
     if (!authHeader || typeof authHeader !== 'string') {
       return null;
@@ -100,7 +101,7 @@ export class JwtAuthPlugin implements GatewayPlugin {
    * Elimina cualquier header entrante del cliente con el prefijo "x-jwt-claim-".
    * Esto previene ataques de suplantación (spoofing) de claims.
    */
-  private sanitizeClaimHeaders(request: any): void {
+  private sanitizeClaimHeaders(request: FastifyRequest): void {
     const headers = request.headers;
     const headerKeys = Object.keys(headers);
 
@@ -115,7 +116,7 @@ export class JwtAuthPlugin implements GatewayPlugin {
    * Inyecta los claims decodificados como headers normalizados en lowercase para el backend.
    * Solo inyecta valores escalares (string, number, boolean).
    */
-  private injectClaimHeaders(request: any, payload: any, claimsToForward: string[]): void {
+  private injectClaimHeaders(request: FastifyRequest, payload: Record<string, unknown>, claimsToForward: string[]): void {
     for (const claim of claimsToForward) {
       const value = payload[claim];
       if (value !== undefined && value !== null) {

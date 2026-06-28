@@ -10,6 +10,12 @@ const METRICS_FINALIZED = Symbol('metricsFinalized');
 const START_TIME = Symbol('metricsStartTime');
 const INITIAL_LABELS = Symbol('metricsInitialLabels');
 
+interface RequestWithMetrics extends FastifyRequest {
+  [START_TIME]?: bigint;
+  [INITIAL_LABELS]?: { method: string; route: string };
+  [METRICS_FINALIZED]?: boolean;
+}
+
 export class MetricsPlugin implements GatewayPlugin {
   public readonly name = 'metrics';
   private readonly metricsPath: string;
@@ -62,7 +68,7 @@ export class MetricsPlugin implements GatewayPlugin {
     }
 
     // Guardar tiempo de inicio
-    (request as any)[START_TIME] = process.hrtime.bigint();
+    (request as RequestWithMetrics)[START_TIME] = process.hrtime.bigint();
 
     // Resolver etiquetas iniciales para in-flight
     const route = resolveRouteLabel(request.gatewayContext?.routeMatch);
@@ -71,7 +77,7 @@ export class MetricsPlugin implements GatewayPlugin {
       route,
     };
 
-    (request as any)[INITIAL_LABELS] = initialLabels;
+    (request as RequestWithMetrics)[INITIAL_LABELS] = initialLabels;
 
     // Incrementar requests en curso
     this.metrics.requestsInFlight.inc(initialLabels);
@@ -117,19 +123,19 @@ export class MetricsPlugin implements GatewayPlugin {
    * Garantiza ejecución EXACTAMENTE UNA VEZ por petición usando un Symbol.
    */
   private finalize(request: FastifyRequest, statusCode: string): void {
-    if ((request as any)[METRICS_FINALIZED]) {
+    if ((request as RequestWithMetrics)[METRICS_FINALIZED]) {
       return;
     }
-    (request as any)[METRICS_FINALIZED] = true;
+    (request as RequestWithMetrics)[METRICS_FINALIZED] = true;
 
     // 1. Decrementar requests en curso con las mismas etiquetas iniciales
-    const initialLabels = (request as any)[INITIAL_LABELS];
+    const initialLabels = (request as RequestWithMetrics)[INITIAL_LABELS];
     if (initialLabels) {
       this.metrics.requestsInFlight.dec(initialLabels);
     }
 
     // 2. Registrar duración e incrementar total
-    const startTime = (request as any)[START_TIME];
+    const startTime = (request as RequestWithMetrics)[START_TIME];
     const routeMatch = request.gatewayContext?.routeMatch;
     const route = resolveRouteLabel(routeMatch);
     const backend = resolveBackendLabel(routeMatch);

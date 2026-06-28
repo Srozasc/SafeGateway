@@ -1,14 +1,19 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, Mock, Mocked } from 'vitest';
 import pino from 'pino';
-import { register } from 'prom-client';
+import { register, Counter, Gauge } from 'prom-client';
+import { FastifyRequest, FastifyReply, FastifyError } from 'fastify';
 import { MetricsPlugin } from '../../../../src/middleware/metrics/plugin.js';
 import { GatewayConfig } from '../../../../src/config/types.js';
 import { RouteMatch } from '../../../../src/routing/types.js';
 
 describe('MetricsPlugin', () => {
-  let mockRequest: any;
-  let mockReply: any;
-  let mockSocket: any;
+  let mockRequest: FastifyRequest;
+  let mockReply: Mocked<FastifyReply>;
+  let mockSocket: {
+    once: Mock;
+    emit(event: string, ...args: unknown[]): void;
+    listeners: Record<string, (...args: unknown[]) => void>;
+  };
   let config: GatewayConfig;
   const logger = pino({ level: 'silent' });
 
@@ -18,6 +23,8 @@ describe('MetricsPlugin', () => {
 
     config = {
       server: { port: 3000, host: '0.0.0.0' },
+      redis: { url: 'redis://localhost:6379' },
+      logging: { level: 'info' },
       metrics: {
         enabled: true,
         path: '/metrics',
@@ -27,16 +34,17 @@ describe('MetricsPlugin', () => {
     };
 
     mockSocket = {
-      once: vi.fn<any>().mockImplementation((event: string, callback: any) => {
+      once: vi.fn().mockImplementation((event: string, callback: (...args: unknown[]) => void) => {
         mockSocket.listeners[event] = callback;
         return mockSocket;
       }),
-      emit(event: string, ...args: any[]) {
-        if (this.listeners[event]) {
-          this.listeners[event](...args);
+      emit(event: string, ...args: unknown[]) {
+        const listener = this.listeners[event];
+        if (listener) {
+          listener(...args);
         }
       },
-      listeners: {} as Record<string, Function>,
+      listeners: {} as Record<string, (...args: unknown[]) => void>,
     };
 
     mockRequest = {
@@ -56,13 +64,14 @@ describe('MetricsPlugin', () => {
           },
           override: null,
           effectiveRateLimit: null,
+          effectiveCors: null,
         } as RouteMatch,
       },
-    };
+    } as unknown as FastifyRequest;
 
     mockReply = {
       statusCode: 200,
-    };
+    } as unknown as Mocked<FastifyReply>;
   });
 
   it('debería inicializar las métricas con labels globales y registrar default metrics', async () => {
@@ -87,11 +96,11 @@ describe('MetricsPlugin', () => {
 
   it('debería omitir el registro de métricas si la ruta coincide con metricsPath', async () => {
     const plugin = new MetricsPlugin(config, logger);
-    mockRequest.url = '/metrics';
+    (mockRequest as unknown as { url: string }).url = '/metrics';
 
     await plugin.onRequestHook(mockRequest, mockReply);
-    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as any;
-    const inFlightData = await inFlightMetric.get();
+    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as unknown as Gauge;
+    const inFlightData = await inFlightMetric!.get();
     expect(inFlightData.values.length).toBe(0); // No incrementado
   });
 
@@ -100,23 +109,23 @@ describe('MetricsPlugin', () => {
 
     await plugin.onRequestHook(mockRequest, mockReply);
 
-    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as any;
-    let inFlightData = await inFlightMetric.get();
-    expect(inFlightData.values[0].value).toBe(1);
-    expect(inFlightData.values[0].labels).toEqual({
+    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as unknown as Gauge;
+    let inFlightData = await inFlightMetric!.get();
+    expect(inFlightData.values[0]!.value).toBe(1);
+    expect(inFlightData.values[0]!.labels).toEqual({
       method: 'GET',
       route: 'users-api',
     });
 
     await plugin.onResponseHook(mockRequest, mockReply);
 
-    inFlightData = await inFlightMetric.get();
-    expect(inFlightData.values[0].value).toBe(0);
+    inFlightData = await inFlightMetric!.get();
+    expect(inFlightData.values[0]!.value).toBe(0);
 
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
-    expect(requestsTotalData.values[0].value).toBe(1);
-    expect(requestsTotalData.values[0].labels).toEqual({
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
+    expect(requestsTotalData.values[0]!.value).toBe(1);
+    expect(requestsTotalData.values[0]!.labels).toEqual({
       method: 'GET',
       route: 'users-api',
       status_code: '200',
@@ -129,20 +138,20 @@ describe('MetricsPlugin', () => {
 
     await plugin.onRequestHook(mockRequest, mockReply);
 
-    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as any;
-    let inFlightData = await inFlightMetric.get();
-    expect(inFlightData.values[0].value).toBe(1);
+    const inFlightMetric = register.getSingleMetric('gateway_http_requests_in_flight') as unknown as Gauge;
+    let inFlightData = await inFlightMetric!.get();
+    expect(inFlightData.values[0]!.value).toBe(1);
 
     // Simular que el socket se cierra de forma abrupta
     mockSocket.emit('close');
 
-    inFlightData = await inFlightMetric.get();
-    expect(inFlightData.values[0].value).toBe(0);
+    inFlightData = await inFlightMetric!.get();
+    expect(inFlightData.values[0]!.value).toBe(0);
 
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
-    expect(requestsTotalData.values[0].value).toBe(1);
-    expect(requestsTotalData.values[0].labels.status_code).toBe('499');
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
+    expect(requestsTotalData.values[0]!.value).toBe(1);
+    expect(requestsTotalData.values[0]!.labels.status_code).toBe('499');
   });
 
   it('debería manejar errores en onErrorHook y finalizar con el status code correcto', async () => {
@@ -153,13 +162,13 @@ describe('MetricsPlugin', () => {
     const errorMock = {
       statusCode: 503,
       message: 'Service Unavailable',
-    } as any;
+    } as unknown as FastifyError;
 
     await plugin.onErrorHook(mockRequest, mockReply, errorMock);
 
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
-    expect(requestsTotalData.values[0].labels.status_code).toBe('503');
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
+    expect(requestsTotalData.values[0]!.labels.status_code).toBe('503');
   });
 
   it('debería finalizar con 500 en onErrorHook si no hay statusCode en el error ni en la respuesta', async () => {
@@ -169,16 +178,16 @@ describe('MetricsPlugin', () => {
 
     const errorMock = {
       message: 'Unknown error',
-    } as any;
+    } as unknown as FastifyError;
 
     // mockReply no tiene statusCode establecido o está indefinido
-    delete mockReply.statusCode;
+    delete (mockReply as unknown as { statusCode?: number }).statusCode;
 
     await plugin.onErrorHook(mockRequest, mockReply, errorMock);
 
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
-    expect(requestsTotalData.values[0].labels.status_code).toBe('500');
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
+    expect(requestsTotalData.values[0]!.labels.status_code).toBe('500');
   });
 
   it('debería manejar abortos en onAbortHook con status code 499', async () => {
@@ -187,9 +196,9 @@ describe('MetricsPlugin', () => {
     await plugin.onRequestHook(mockRequest, mockReply);
     await plugin.onAbortHook(mockRequest);
 
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
-    expect(requestsTotalData.values[0].labels.status_code).toBe('499');
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
+    expect(requestsTotalData.values[0]!.labels.status_code).toBe('499');
   });
 
   it('debería registrar hits de rate limiting si el status code final es 429', async () => {
@@ -199,10 +208,10 @@ describe('MetricsPlugin', () => {
     mockReply.statusCode = 429;
     await plugin.onResponseHook(mockRequest, mockReply);
 
-    const rateLimitHitsMetric = register.getSingleMetric('gateway_rate_limit_hits_total') as any;
-    const rateLimitHitsData = await rateLimitHitsMetric.get();
-    expect(rateLimitHitsData.values[0].value).toBe(1);
-    expect(rateLimitHitsData.values[0].labels).toEqual({
+    const rateLimitHitsMetric = register.getSingleMetric('gateway_rate_limit_hits_total') as unknown as Counter;
+    const rateLimitHitsData = await rateLimitHitsMetric!.get();
+    expect(rateLimitHitsData.values[0]!.value).toBe(1);
+    expect(rateLimitHitsData.values[0]!.labels).toEqual({
       route: 'users-api',
     });
   });
@@ -216,17 +225,17 @@ describe('MetricsPlugin', () => {
     await plugin.onResponseHook(mockRequest, mockReply);
 
     // Llamar luego a error hook (por ejemplo, si ocurren ambos eventos en cascada)
-    const errorMock = { statusCode: 500 } as any;
+    const errorMock = { statusCode: 500 } as unknown as FastifyError;
     await plugin.onErrorHook(mockRequest, mockReply, errorMock);
 
     // Simular también cierre de socket
     mockSocket.emit('close');
 
     // Comprobar que requestsTotal es exactamente 1 y el status_code final es '200'
-    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as any;
-    const requestsTotalData = await requestsTotalMetric.get();
+    const requestsTotalMetric = register.getSingleMetric('gateway_http_requests_total') as unknown as Counter;
+    const requestsTotalData = await requestsTotalMetric!.get();
     expect(requestsTotalData.values.length).toBe(1);
-    expect(requestsTotalData.values[0].value).toBe(1);
-    expect(requestsTotalData.values[0].labels.status_code).toBe('200');
+    expect(requestsTotalData.values[0]!.value).toBe(1);
+    expect(requestsTotalData.values[0]!.labels.status_code).toBe('200');
   });
 });

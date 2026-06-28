@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { describe, it, expect, vi, beforeEach, afterEach, Mocked } from 'vitest';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from 'fastify';
 import {
   GatewayError,
   RouteNotFoundError,
@@ -66,40 +66,40 @@ describe('Global Error Module', () => {
   });
 
   describe('registerErrorHandler', () => {
-    let mockFastify: vi.Mocked<FastifyInstance>;
-    let mockRequest: vi.Mocked<FastifyRequest>;
-    let mockReply: vi.Mocked<FastifyReply>;
-    let storedErrorHandler: any;
-    let storedNotFoundHandler: any;
+    let mockFastify: Mocked<FastifyInstance>;
+    let mockRequest: Mocked<FastifyRequest>;
+    let mockReply: Mocked<FastifyReply>;
+    let storedErrorHandler: ((error: FastifyError & { status?: number }, request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) | undefined;
+    let storedNotFoundHandler: ((request: FastifyRequest, reply: FastifyReply) => void | Promise<void>) | undefined;
 
     beforeEach(() => {
       mockFastify = {
-        setErrorHandler: vi.fn().mockImplementation((fn: any) => {
-          storedErrorHandler = fn;
+        setErrorHandler: vi.fn().mockImplementation((fn) => {
+          storedErrorHandler = fn as unknown as typeof storedErrorHandler;
           return mockFastify;
         }),
-        setNotFoundHandler: vi.fn().mockImplementation((fn: any) => {
-          storedNotFoundHandler = fn;
+        setNotFoundHandler: vi.fn().mockImplementation((fn) => {
+          storedNotFoundHandler = fn as unknown as typeof storedNotFoundHandler;
           return mockFastify;
         }),
-      } as any;
+      } as unknown as Mocked<FastifyInstance>;
 
       mockRequest = {
         id: 'test-req-id',
         url: '/api/v1/test',
         method: 'POST',
         log: {
-          error: vi.fn<any>(),
-          warn: vi.fn<any>(),
-          info: vi.fn<any>(),
-          debug: vi.fn<any>(),
+          error: vi.fn(),
+          warn: vi.fn(),
+          info: vi.fn(),
+          debug: vi.fn(),
         },
-      } as any;
+      } as unknown as Mocked<FastifyRequest>;
 
       mockReply = {
-        status: vi.fn<any>().mockReturnThis(),
-        send: vi.fn<any>().mockReturnThis(),
-      } as any;
+        status: vi.fn().mockReturnThis(),
+        send: vi.fn().mockReturnThis(),
+      } as unknown as Mocked<FastifyReply>;
 
       registerErrorHandler(mockFastify);
     });
@@ -115,7 +115,7 @@ describe('Global Error Module', () => {
       it('debería capturar errores 5xx, responder con status y loguear en nivel error', async () => {
         const error = new Error('Base de datos inaccesible');
 
-        await storedErrorHandler(error, mockRequest, mockReply);
+        await storedErrorHandler!(error as FastifyError, mockRequest, mockReply);
 
         expect(mockReply.status).toHaveBeenCalledWith(500);
         expect(mockReply.send).toHaveBeenCalledWith(
@@ -136,7 +136,7 @@ describe('Global Error Module', () => {
       it('debería capturar errores 4xx, responder con status y loguear en nivel warn', async () => {
         const error = new GatewayError('Entrada no válida', 400);
 
-        await storedErrorHandler(error, mockRequest, mockReply);
+        await storedErrorHandler!(error as unknown as FastifyError, mockRequest, mockReply);
 
         expect(mockReply.status).toHaveBeenCalledWith(400);
         expect(mockReply.send).toHaveBeenCalledWith(
@@ -154,10 +154,12 @@ describe('Global Error Module', () => {
       });
 
       it('debería formatear errores de validación de Fastify como HTTP 400', async () => {
-        const validationError = new Error('Formato email incorrecto') as any;
+        const validationError = new Error('Formato email incorrecto') as Error & { validation?: boolean };
         validationError.validation = true; // Simular bandera de Fastify
 
-        await storedErrorHandler(validationError, mockRequest, mockReply);
+        if (storedErrorHandler) {
+          await storedErrorHandler(validationError as FastifyError, mockRequest, mockReply);
+        }
 
         expect(mockReply.status).toHaveBeenCalledWith(400);
         expect(mockRequest.log.warn).toHaveBeenCalled();
@@ -166,7 +168,9 @@ describe('Global Error Module', () => {
 
     describe('setNotFoundHandler Callback', () => {
       it('debería responder con HTTP 404 y loguear el intento en nivel warn', async () => {
-        await storedNotFoundHandler(mockRequest, mockReply);
+        if (storedNotFoundHandler) {
+          await storedNotFoundHandler(mockRequest, mockReply);
+        }
 
         expect(mockReply.status).toHaveBeenCalledWith(404);
         expect(mockReply.send).toHaveBeenCalledWith(

@@ -62,10 +62,10 @@ describe('CircuitStateMachine', () => {
       );
       // Record 6 failures out of 10 requests = 60% > 50%
       // 3 successes, 2 failures, 1 success (resets consecutive), 4 failures (10th request is failure)
-      for (let i = 0; i < 3; i++) machine2.recordSuccess();
-      for (let i = 0; i < 2; i++) machine2.recordFailure();
+      for (let i = 0; i < 3; i++) {machine2.recordSuccess();}
+      for (let i = 0; i < 2; i++) {machine2.recordFailure();}
       machine2.recordSuccess();
-      for (let i = 0; i < 4; i++) machine2.recordFailure();
+      for (let i = 0; i < 4; i++) {machine2.recordFailure();}
       expect(machine2.getState()).toBe(CircuitState.OPEN);
     });
 

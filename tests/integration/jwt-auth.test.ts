@@ -5,8 +5,6 @@ import { SignJWT } from 'jose';
 import { buildServer } from '../../src/server.js';
 import { MiddlewarePipeline } from '../../src/middleware/pipeline.js';
 import { MockBackend } from '../helpers/mock-backend.js';
-import { RateLimitPlugin } from '../../src/middleware/rate-limit/plugin.js';
-import { RedisRateLimitStore } from '../../src/middleware/rate-limit/store.js';
 import { JwtAuthPlugin } from '../../src/middleware/jwt-auth/plugin.js';
 import type { GatewayConfig } from '../../src/config/types.js';
 
@@ -34,7 +32,7 @@ describe('JWT Authentication Integration Tests', () => {
   });
 
   // Auxiliar para firmar tokens JWT
-  async function generateToken(payload: any, secret: string = SECRET_KEY): Promise<string> {
+  async function generateToken(payload: Record<string, unknown>, secret: string = SECRET_KEY): Promise<string> {
     const encodedSecret = new TextEncoder().encode(secret);
     return await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })
@@ -48,6 +46,7 @@ describe('JWT Authentication Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/protected',
@@ -89,6 +88,7 @@ describe('JWT Authentication Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/protected',
@@ -137,6 +137,7 @@ describe('JWT Authentication Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/protected',
@@ -184,6 +185,7 @@ describe('JWT Authentication Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/public',

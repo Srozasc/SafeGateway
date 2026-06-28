@@ -39,12 +39,12 @@ export class MockBackend {
 
   private getBehaviorFromUrl(url: string): MockBackendBehavior {
     // Check query parameters for behavior override
-    if (url.includes('?behavior=error500')) return 'error500';
-    if (url.includes('?behavior=error502')) return 'error502';
-    if (url.includes('?behavior=error503')) return 'error503';
-    if (url.includes('?behavior=timeout')) return 'timeout';
-    if (url.includes('?behavior=slow')) return 'slow';
-    if (url.includes('?behavior=success')) return 'success';
+    if (url.includes('?behavior=error500')) {return 'error500';}
+    if (url.includes('?behavior=error502')) {return 'error502';}
+    if (url.includes('?behavior=error503')) {return 'error503';}
+    if (url.includes('?behavior=timeout')) {return 'timeout';}
+    if (url.includes('?behavior=slow')) {return 'slow';}
+    if (url.includes('?behavior=success')) {return 'success';}
     return this.defaultBehavior;
   }
 
@@ -108,7 +108,7 @@ export class MockBackend {
   public stop(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server.close((err) => {
-        if (err) return reject(err);
+        if (err) {return reject(err);}
         resolve();
       });
     });

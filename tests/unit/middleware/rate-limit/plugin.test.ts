@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mocked } from 'vitest';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Logger } from 'pino';
 import { RateLimitPlugin } from '../../../../src/middleware/rate-limit/plugin.js';
@@ -6,27 +6,27 @@ import { RateLimitStore } from '../../../../src/middleware/rate-limit/types.js';
 import { RequestContext } from '../../../../src/middleware/pipeline.js';
 
 describe('RateLimitPlugin', () => {
-  let mockStore: vi.Mocked<RateLimitStore>;
-  let mockLogger: vi.Mocked<Logger>;
-  let mockReply: vi.Mocked<FastifyReply>;
+  let mockStore: Mocked<RateLimitStore>;
+  let mockLogger: Mocked<Logger>;
+  let mockReply: Mocked<FastifyReply>;
 
   beforeEach(() => {
     mockStore = {
-      increment: vi.fn<any>(),
-    } as any;
+      increment: vi.fn(),
+    } as unknown as Mocked<RateLimitStore>;
 
     mockLogger = {
-      warn: vi.fn<any>(),
-      info: vi.fn<any>(),
-      error: vi.fn<any>(),
-      debug: vi.fn<any>(),
-    } as any;
+      warn: vi.fn(),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    } as unknown as Mocked<Logger>;
 
     mockReply = {
-      header: vi.fn<any>().mockReturnThis(),
-      status: vi.fn<any>().mockReturnThis(),
-      send: vi.fn<any>().mockReturnThis(),
-    } as any;
+      header: vi.fn().mockReturnThis(),
+      status: vi.fn().mockReturnThis(),
+      send: vi.fn().mockReturnThis(),
+    } as unknown as Mocked<FastifyReply>;
   });
 
   describe('extractIp', () => {
@@ -106,6 +106,7 @@ describe('RateLimitPlugin', () => {
           route: { prefix: '/api', target: 'http://localhost' },
           override: null,
           effectiveRateLimit: null, // Sin rate limit
+          effectiveCors: null,
         },
       };
 
@@ -129,6 +130,7 @@ describe('RateLimitPlugin', () => {
           route: { prefix: '/api', target: 'http://localhost' },
           override: null,
           effectiveRateLimit: { maxRequests: 10, windowSeconds: 60 },
+          effectiveCors: null,
         },
       };
 
@@ -168,6 +170,7 @@ describe('RateLimitPlugin', () => {
           route: { prefix: '/admin', target: 'http://localhost' },
           override: null,
           effectiveRateLimit: { maxRequests: 5, windowSeconds: 30 },
+          effectiveCors: null,
         },
       };
 
@@ -216,6 +219,7 @@ describe('RateLimitPlugin', () => {
           route: { prefix: '/api', target: 'http://localhost' },
           override: null,
           effectiveRateLimit: { maxRequests: 10, windowSeconds: 60 },
+          effectiveCors: null,
         },
       };
 
@@ -253,6 +257,7 @@ describe('RateLimitPlugin', () => {
           route: { prefix: '/api', target: 'http://localhost' },
           override: null,
           effectiveRateLimit: { maxRequests: 10, windowSeconds: 60 },
+          effectiveCors: null,
         },
       };
 

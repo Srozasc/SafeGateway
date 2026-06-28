@@ -85,7 +85,7 @@ describe('RetryInterceptor', () => {
     });
 
     it('should return false for non-retryable status codes', () => {
-      const error = { message: 'Bad Request', statusCode: 400 } as Error;
+      const error = { message: 'Bad Request', statusCode: 400 } as unknown as Error;
       expect(interceptor.isRetryable(error)).toBe(false);
     });
   });

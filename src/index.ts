@@ -12,6 +12,7 @@ import { ConfigSnapshot } from './config/types.js';
 import { ConfigReloader } from './config/reloader.js';
 import { MetricsPlugin } from './middleware/metrics/plugin.js';
 import { createCircuitBreakerPlugin } from './middleware/circuit-breaker/index.js';
+import { CorsPlugin } from './middleware/cors/plugin.js';
 
 let server: FastifyInstance | undefined;
 let redis: Redis | undefined;
@@ -86,9 +87,14 @@ async function bootstrap(): Promise<void> {
     logger.info('Configurando módulo de Autenticación JWT...');
     const jwtAuthPlugin = new JwtAuthPlugin(logger);
 
+    // Configurar módulo CORS (PRIMER plugin en el pipeline, antes de rate-limit/auth/circuit-breaker)
+    logger.info('Configurando módulo CORS...');
+    const corsPlugin = new CorsPlugin(logger);
+
     // Configurar módulo de Métricas Prometheus
     let metricsPlugin: MetricsPlugin | undefined;
-    const pluginsList: GatewayPlugin[] = [rateLimitPlugin, jwtAuthPlugin];
+    const pluginsList: GatewayPlugin[] = [corsPlugin, rateLimitPlugin, jwtAuthPlugin];
+    //                                                        ↑ CORS primero
 
     // Configurar Circuit Breaker
     const circuitBreakerPlugin = createCircuitBreakerPlugin(logger);
@@ -151,9 +157,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
     }
 
     // 2. Cerrar los pools de conexiones undici
-    if (server && (server as any).poolManager) {
+    const serverWithPool = server as unknown as { poolManager?: { closeAll(): Promise<void> } };
+    if (serverWithPool && serverWithPool.poolManager) {
       logger.info('Cerrando connection pools de backends...');
-      await (server as any).poolManager.closeAll();
+      await serverWithPool.poolManager.closeAll();
       logger.info('Connection pools cerrados exitosamente.');
     }
 

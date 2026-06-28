@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterAll, MockInstance } from 'vitest';
 import { loadConfig, interpolateEnvVars } from '../../../src/config/loader.js';
 import {
   ConfigFileNotFoundError,
@@ -10,16 +10,16 @@ import {
 
 describe('Config Loader & Interpolator', () => {
   const originalEnv = { ...process.env };
-  let existsSpy: vi.SpiedFunction<typeof fs.existsSync>;
-  let readSpy: vi.SpiedFunction<typeof fs.readFileSync>;
+  let existsSpy: MockInstance<typeof fs.existsSync>;
+  let readSpy: MockInstance<typeof fs.readFileSync>;
 
   beforeEach(() => {
     vi.resetAllMocks();
     process.env = { ...originalEnv };
 
     // Crear espías limpios sobre fs
-    existsSpy = vi.spyOn(fs, 'existsSync') as vi.SpiedFunction<typeof fs.existsSync>;
-    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as vi.SpiedFunction<
+    existsSpy = vi.spyOn(fs, 'existsSync') as MockInstance<typeof fs.existsSync>;
+    readSpy = vi.spyOn(fs, 'readFileSync') as unknown as MockInstance<
       typeof fs.readFileSync
     >;
   });
@@ -60,7 +60,7 @@ describe('Config Loader & Interpolator', () => {
     it('debería lanzar ConfigParseError si el archivo tiene YAML inválido', () => {
       existsSpy.mockReturnValue(true);
       // Sintaxis YAML verdaderamente rota con llaves mal estructuradas que causa error de parseo inmediato
-      readSpy.mockReturnValue('invalid: { [ } : \t tab_illegal' as any);
+      readSpy.mockReturnValue('invalid: { [ } : \t tab_illegal' as unknown as ReturnType<typeof fs.readFileSync>);
 
       expect(() => loadConfig('invalid.yaml')).toThrow(ConfigParseError);
     });
@@ -74,7 +74,7 @@ redis:
 routes: [] # Inválido (requiere al menos una ruta)
 `;
       existsSpy.mockReturnValue(true);
-      readSpy.mockReturnValue(invalidYamlContent as any);
+      readSpy.mockReturnValue(invalidYamlContent as unknown as ReturnType<typeof fs.readFileSync>);
 
       expect(() => loadConfig('invalid-schema.yaml')).toThrow(ConfigValidationError);
       expect(() => loadConfig('invalid-schema.yaml')).toThrow(
@@ -94,7 +94,7 @@ routes:
       windowSeconds: 60
 `;
       existsSpy.mockReturnValue(true);
-      readSpy.mockReturnValue(validYamlContent as any);
+      readSpy.mockReturnValue(validYamlContent as unknown as ReturnType<typeof fs.readFileSync>);
 
       const config = loadConfig('valid.yaml');
 
@@ -120,7 +120,7 @@ routes:
     target: "http://backend:8080"
 `;
       existsSpy.mockReturnValue(true);
-      readSpy.mockReturnValue(validYamlContent as any);
+      readSpy.mockReturnValue(validYamlContent as unknown as ReturnType<typeof fs.readFileSync>);
 
       const config = loadConfig('valid.yaml');
 
@@ -132,7 +132,7 @@ routes:
 
       // Intentar mutar debería dar error en strict mode
       expect(() => {
-        (config as any).server.port = 4000;
+        (config as unknown as { server: { port: number } }).server.port = 4000;
       }).toThrow();
     });
   });

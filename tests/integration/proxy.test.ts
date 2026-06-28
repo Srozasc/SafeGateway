@@ -2,6 +2,10 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import type { GatewayConfig } from '../../src/config/types.js';
+import pino from 'pino';
+import { buildServer } from '../../src/server.js';
+import { MiddlewarePipeline } from '../../src/middleware/pipeline.js';
 
 // Mock backend for testing
 class MockBackend {
@@ -64,7 +68,7 @@ class MockBackend {
   stop(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server.close((err) => {
-        if (err) return reject(err);
+        if (err) {return reject(err);}
         resolve();
       });
     });
@@ -78,34 +82,15 @@ class MockBackend {
   }
 }
 
-// Dynamic import for ES modules
-async function importModules() {
-  const { buildServer } = await import('../../src/server.js');
-  const { MiddlewarePipeline } = await import('../../src/middleware/pipeline.js');
-  const { GatewayConfig } = await import('../../src/config/types.js');
-  const pino = (await import('pino')).default;
 
-  return { buildServer, MiddlewarePipeline, GatewayConfig, pino };
-}
 
 describe('Proxy Integration Tests', () => {
   let backend: MockBackend;
   let backendPort: number;
-  let buildServer: any;
-  let MiddlewarePipeline: any;
-  let GatewayConfig: any;
-  let pino: any;
-
   beforeAll(async () => {
     backend = new MockBackend();
     backendPort = await backend.start();
     console.log('[beforeAll] Backend started on port:', backendPort);
-
-    const modules = await importModules();
-    buildServer = modules.buildServer;
-    MiddlewarePipeline = modules.MiddlewarePipeline;
-    GatewayConfig = modules.GatewayConfig;
-    pino = modules.pino;
     console.log('[beforeAll] Modules imported');
   }, 30000);
 
@@ -123,6 +108,7 @@ describe('Proxy Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/api',
@@ -136,7 +122,7 @@ describe('Proxy Integration Tests', () => {
     const logger = pino({ level: 'silent' });
     const pipeline = new MiddlewarePipeline();
     const server = buildServer(config, pipeline, logger);
-    console.log('[TEST] Server built, routes:', server.routeRegistry.getRoutes().map(r => r.prefix));
+    console.log('[TEST] Server built, routes:', server.routeRegistry.getRoutes().map((r: unknown) => (r as { prefix: string }).prefix));
 
     const response = await server.inject({
       method: 'GET',
@@ -160,6 +146,7 @@ describe('Proxy Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/api',
@@ -194,6 +181,7 @@ describe('Proxy Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/api',
@@ -222,6 +210,7 @@ describe('Proxy Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/api',
@@ -256,6 +245,7 @@ describe('Proxy Integration Tests', () => {
       server: { port: 3000, host: '0.0.0.0' },
       redis: { url: 'redis://localhost:6379' },
       logging: { level: 'info' },
+      metrics: { enabled: false, path: '/metrics', defaultLabels: {} },
       routes: [
         {
           prefix: '/microservice-a',
