@@ -10,7 +10,7 @@
 
 > **Como** operador de infraestructura (SRE / DevOps)
 > **quiero** un endpoint único `GET /health` que agregue el estado de todos los servicios downstream
-> **para** que load balancers, Kubernetes liveness probes y herramientas de monitoreo tengan un solo punto de consulta para conocer la salud del sistema completo, sin necesidad de sondear cada servicio individualmente.
+> **para** que load balancers, Kubernetes readiness probes y herramientas de monitoreo tengan un solo punto de consulta para conocer la salud de las dependencias, evitando su uso como liveness probe para no causar reinicios del gateway por fallos externos.
 
 ---
 
@@ -22,7 +22,7 @@ SafeGateway actualmente expone `/metrics` (Prometheus) pero no tiene un endpoint
 - Dashboards externos a consumir `/metrics` y parsear Prometheus para extraer estado.
 - Operators a curl múltiples URLs para diagnosticar incidentes.
 
-Este spec define un plugin de health aggregation que consulta en paralelo el endpoint `/health` de cada backend declarado en `routes[]` y devuelve una respuesta agregada con código HTTP apropriado.
+Este spec define un endpoint nativo de health aggregation que consulta en paralelo el endpoint `/health` de cada backend declarado en `routes[]` y devuelve una respuesta agregada con código HTTP apropiado.
 
 ---
 
@@ -34,11 +34,11 @@ Este spec define un plugin de health aggregation que consulta en paralelo el end
 - **H2**: Cada servicio expone su propio `GET /health` (path configurable globalmente).
 - **H3**: Estados por servicio: `ok`, `degraded`, `down`.
 - **H4**: Estado global: `ok` si todos `ok`, `down` si alguno `down`, `degraded` en cualquier otro caso.
-- **H5**: HTTP status: `200` si global=ok, `207` si global=degraded, `503` si global=down.
+- **H5**: HTTP status: `200` si global=ok o global=degraded (para asegurar la disponibilidad del gateway en balanceadores de carga si hay degradación parcial), y `503` si global=down.
 - **H6**: Respuesta JSON con timestamp, status global, array de servicios con su estado.
 - **H7**: Sin autenticación en el endpoint de health.
 - **H8**: Sin rate limit en el endpoint de health.
-- **H9**: Lista de servicios derivada de `routes[]` en la config.
+- **H9**: Lista de servicios derivada de `routes[]` en la config. El nombre (`name`) de cada servicio se resolverá como: `route.backendName ?? hostname(target) ?? route.prefix`.
 
 ### Técnicas
 
@@ -69,7 +69,6 @@ health:
   path: /health                    # default: /health
   backendPath: /health             # default: /health (path en cada servicio downstream)
   timeoutMs: 2000                  # default: 2000 (2s por servicio)
-  retries: 0                       # default: 0 (sin reintentos para no retrasar respuesta)
 
 routes:
   - prefix: /api/auth
@@ -346,22 +345,7 @@ And el error reportado es: "connection refused"
 And el gateway responde HTTP 503
 ```
 
-### Escenario 11: Lista vacía de servicios
-
-```gherkin
-Given el gateway con routes: [] (ningún servicio configurado)
-When un cliente hace GET /health
-Then el gateway responde HTTP 200 con JSON:
-  """
-  {
-    "status": "ok",
-    "timestamp": "2026-06-28T14:30:00.123Z",
-    "services": []
-  }
-  """
-```
-
-### Escenario 12: Validación al startup — timeout inválido
+### Escenario 11: Validación al startup — timeout inválido
 
 ```gherkin
 Given el archivo gateway.yaml con:
@@ -383,21 +367,20 @@ And el proceso aborta con exit code 1
 
 ### Funcionales
 
-- [ ] El endpoint `/health` responde con código HTTP apropriado (`200`/`207`/`503`).
+- [ ] El endpoint `/health` responde con código HTTP apropiado (`200`/`503`).
 - [ ] La respuesta JSON incluye timestamp, status global, y estado por servicio.
 - [ ] Las consultas a servicios downstream se ejecutan en paralelo.
 - [ ] El estado global se calcula correctamente según las reglas definidas.
 - [ ] El endpoint no requiere autenticación ni rate limiting.
 - [ ] El endpoint no se proxea a ningún backend.
 - [ ] El path del endpoint y el path del backend son configurables.
-- [ ] Funciona correctamente cuando no hay servicios configurados.
 
 ### Técnicos
 
-- [ ] Implementación en `src/middleware/health/` siguiendo interfaz `GatewayPlugin`.
+- [ ] Implementación de un endpoint nativo de Fastify en `src/middleware/health/` (sin usar `GatewayPlugin`).
 - [ ] Schema Zod añadido a `src/config/schema.ts`.
 - [ ] El endpoint se registra en Fastify **antes** de las rutas de proxy (`src/server.ts`).
-- [ ] Tests unitarios cubren los 12 BDD scenarios.
+- [ ] Tests unitarios cubren los 11 BDD scenarios.
 - [ ] Tests de integración con 3 mock backends (uno healthy, uno degraded, uno down).
 - [ ] Cobertura ≥85% en `src/middleware/health/`.
 - [ ] Documentación actualizada en CLAUDE.md y README.md.
@@ -414,10 +397,9 @@ And el proceso aborta con exit code 1
 
 ### Internas (SafeGateway)
 
-- `src/middleware/pipeline.ts` — interfaz `GatewayPlugin`
 - `src/config/schema.ts` — añadir schema Zod para `health`
-- `src/server.ts` — registrar endpoint antes de rutas de proxy
-- `src/proxy/engine.ts` — reutilizar cliente HTTP (Undici) o fetch nativo para health checks
+- `src/server.ts` — registrar endpoint nativo antes de rutas de proxy
+- `src/proxy/engine.ts` — no se requiere acoplamiento con la lógica de proxy
 
 ### Externas
 
@@ -486,7 +468,7 @@ And el proceso aborta con exit code 1
 
 1. **Registro en Fastify**: El endpoint `/health` debe registrarse con `fastify.get(path, handler)` **antes** de registrar las rutas de proxy. Esto evita que el matcher de rutas lo capture.
 
-2. **Reutilizar Undici**: Para consistencia con el resto del gateway, usar el mismo cliente HTTP (Undici pool por backend) que ya existe en `src/proxy/pool.ts`. Alternativamente, `fetch` nativo es aceptable por simplicidad.
+2. **Uso de Fetch Nativo**: Por simplicidad y aislamiento respecto al pipeline de proxy, se utilizará el método `fetch` nativo de Node.js para realizar las peticiones de salud a los backends.
 
 3. **Cálculo del status global**:
 
@@ -499,14 +481,12 @@ const globalStatus =
 
 const httpStatus =
   globalStatus === "down" ? 503 :
-  globalStatus === "degraded" ? 207 :
-  200;
+  200; // degraded y ok retornan 200 para no retirar el gateway de balanceadores de carga
 ```
 
-4. **Manejo de errores de Undici**: Mapear códigos de error a mensajes legibles:
-   - `UND_ERR_SOCKET` → `"connection failed"`
-   - `UND_ERR_CONNECT_TIMEOUT` → `"timeout after ${timeoutMs}ms"`
-   - Otros → mensaje del error
+4. **Manejo de errores**: Mapear excepciones o fallos de red en el fetch a mensajes legibles:
+   - Timeout de la petición → `"timeout after ${timeoutMs}ms"`
+   - Errores de socket/red → `"connection failed"` o el mensaje del error
 
 5. **Métrica de latencia**: El campo `latencyMs` debe medirse con `performance.now()` antes y después del request.
 
@@ -515,5 +495,5 @@ const httpStatus =
 ## Referencias
 
 - [Kubernetes Liveness/Readiness Probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/)
-- [RFC 7231: HTTP Status Codes (207 Multi-Status)](https://www.rfc-editor.org/rfc/rfc7231#section-6.3.7)
-- SafeGateway existentes: `src/middleware/rate-limit/`, `src/proxy/pool.ts` (referencia de patrón)
+- [RFC 4918: HTTP Extensions for WebDAV (207 Multi-Status)](https://tools.ietf.org/html/rfc4918#section-11.1) (Referencia para estructura de estados degraded, aunque usemos 200)
+- SafeGateway existentes: `src/server.ts` (referencia de registro de `/metrics`)
