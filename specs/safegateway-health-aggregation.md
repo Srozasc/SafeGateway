@@ -1,4 +1,4 @@
-# Spec: Plugin Health Aggregation para SafeGateway
+# Spec: Endpoint Health Aggregation para SafeGateway
 
 > **Estado**: Pendiente de implementación
 > **Proyecto destino**: [SafeGateway](https://github.com/Srozasc/SafeGateway)
@@ -192,7 +192,7 @@ health:
 
 ### Caso 3: Un servicio DEGRADED (4xx)
 
-**HTTP 207 Multi-Status**
+**HTTP 200 OK**
 
 ```json
 {
@@ -287,7 +287,7 @@ And el gateway responde HTTP 503
 Given el gateway con 3 servicios, donde catalog-service responde HTTP 401 en /health
 When un cliente hace GET /health
 Then catalog-service se marca como "degraded" con statusCode: 401
-And el gateway responde HTTP 207 (Multi-Status)
+And el gateway responde HTTP 200 OK
 And los otros servicios aparecen como "ok"
 ```
 
@@ -296,8 +296,8 @@ And los otros servicios aparecen como "ok"
 ```gherkin
 Given el gateway con jwt-auth habilitado para /api/*
 When un cliente hace GET /health SIN Authorization header
-Then el gateway responde 200/207/503 sin intentar validar JWT
-And el request NO pasa por el plugin jwt-auth
+Then el gateway responde 200/503 sin intentar validar JWT
+And el request NO pasa por el pipeline jwt-auth
 ```
 
 ### Escenario 6: Health endpoint NO está rate-limited
@@ -315,7 +315,7 @@ And ningún request retorna 429
 Given el gateway con health.path = /health y una ruta con prefix /api
 When un cliente hace GET /health
 Then el gateway responde con el JSON de health (no proxea a ningún backend)
-And el request NO se cuenta en métricas de proxy
+And el request NO se cuenta como request proxied/backend (se excluye de MetricsPlugin igual que metrics.path)
 ```
 
 ### Escenario 8: Health deshabilitado retorna 404
@@ -341,7 +341,7 @@ And responde con el formato estándar de health
 Given el gateway con un servicio configurado pero el puerto está cerrado
 When un cliente hace GET /health
 Then ese servicio se marca como "down"
-And el error reportado es: "connection refused"
+And el error reportado es: "connection failed"
 And el gateway responde HTTP 503
 ```
 
@@ -380,6 +380,7 @@ And el proceso aborta con exit code 1
 - [ ] Implementación de un endpoint nativo de Fastify en `src/middleware/health/` (sin usar `GatewayPlugin`).
 - [ ] Schema Zod añadido a `src/config/schema.ts`.
 - [ ] El endpoint se registra en Fastify **antes** de las rutas de proxy (`src/server.ts`).
+- [ ] `MetricsPlugin` excluye dinámicamente el path configurado en `health.path` para evitar contaminar las métricas de tráfico proxied (evitando hardcodear `/health`).
 - [ ] Tests unitarios cubren los 11 BDD scenarios.
 - [ ] Tests de integración con 3 mock backends (uno healthy, uno degraded, uno down).
 - [ ] Cobertura ≥85% en `src/middleware/health/`.
@@ -388,7 +389,7 @@ And el proceso aborta con exit code 1
 ### Operacionales
 
 - [ ] Logs estructurados con nivel `debug` por servicio consultado.
-- [ ] Latencia del endpoint ≤ timeout configurado (no acumulado).
+- [ ] Latencia del endpoint ≤ timeout configurado + margen de overhead mínimo (no acumulado por cantidad de servicios).
 - [ ] Sin nuevas dependencias externas.
 
 ---
@@ -418,7 +419,7 @@ And el proceso aborta con exit code 1
 
 ---
 
-## Mockup ASCII — Flujo del plugin
+## Mockup ASCII — Flujo del endpoint
 
 ```
     Cliente ───GET /health───► Gateway
@@ -468,7 +469,7 @@ And el proceso aborta con exit code 1
 
 1. **Registro en Fastify**: El endpoint `/health` debe registrarse con `fastify.get(path, handler)` **antes** de registrar las rutas de proxy. Esto evita que el matcher de rutas lo capture.
 
-2. **Uso de Fetch Nativo**: Por simplicidad y aislamiento respecto al pipeline de proxy, se utilizará el método `fetch` nativo de Node.js para realizar las peticiones de salud a los backends.
+2. **Uso de Fetch Nativo**: Por simplicidad y aislamiento respecto al pipeline de proxy, se utilizará el método `fetch` nativo de Node.js para realizar las peticiones de salud a los backends. El timeout se debe implementar de forma explícita utilizando `AbortSignal.timeout(timeoutMs)` para garantizar que se cumpla el SLA, evitando depender de los tiempos de espera indefinidos o por defecto del sistema operativo/runtime.
 
 3. **Cálculo del status global**:
 
@@ -484,9 +485,7 @@ const httpStatus =
   200; // degraded y ok retornan 200 para no retirar el gateway de balanceadores de carga
 ```
 
-4. **Manejo de errores**: Mapear excepciones o fallos de red en el fetch a mensajes legibles:
-   - Timeout de la petición → `"timeout after ${timeoutMs}ms"`
-   - Errores de socket/red → `"connection failed"` o el mensaje del error
+4. **Manejo de errores**: Mapear excepciones o fallos de red en el fetch a mensajes legibles. Dado que los fallos por timeout pueden lanzar `TimeoutError`, `AbortError` o errores envueltos según la versión de Node.js, la lógica de control de errores debe capturar específicamente estos nombres de error (ej. `error.name === 'TimeoutError' || error.name === 'AbortError'`) para normalizarlos consistentemente como `"timeout after ${timeoutMs}ms"`. Otros fallos de socket o DNS se mapean a `"connection failed"` o a su respectivo mensaje.
 
 5. **Métrica de latencia**: El campo `latencyMs` debe medirse con `performance.now()` antes y después del request.
 
@@ -495,5 +494,4 @@ const httpStatus =
 ## Referencias
 
 - [Kubernetes Liveness/Readiness Probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/)
-- [RFC 4918: HTTP Extensions for WebDAV (207 Multi-Status)](https://tools.ietf.org/html/rfc4918#section-11.1) (Referencia para estructura de estados degraded, aunque usemos 200)
 - SafeGateway existentes: `src/server.ts` (referencia de registro de `/metrics`)

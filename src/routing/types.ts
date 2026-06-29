@@ -1,4 +1,5 @@
-import { RouteConfig, OverrideConfig, RateLimitConfig, CorsConfig } from '../config/types.js';
+import { RouteConfig, OverrideConfig, RateLimitConfig, CorsConfig, JwtAuthConfig, JwtGlobalConfig } from '../config/types.js';
+import type { ResolvedJwtAuth } from '../middleware/jwt-auth/types.js';
 
 export interface RouteMatch {
   /**
@@ -23,4 +24,24 @@ export interface RouteMatch {
    * null si no hay CORS configurado para esta ruta.
    */
   effectiveCors: CorsConfig | null;
+
+  /**
+   * Configuración JWT efectiva aplicada con precedencia:
+   * jwtOverrides[path] > routes[].jwt > jwt (global cuando aplica).
+   * Si la ruta no requiere auth JWT, el `kind` será `'public'` y el plugin
+   * hará bypass total.
+   */
+  effectiveJwt: ResolvedJwtAuth;
+
+  /**
+   * JWT override aplicado (path-exact). Se mantiene accesible para inspección
+   * y para que tests puedan verificar la precedencia sin re-mergear.
+   */
+  jwtOverride: JwtAuthConfig | null;
+
+  /**
+   * Sección global `jwt` del config — expuesta en el match para que el plugin
+   * pueda resolver el cliente JWKS por nombre o por claim `iss`.
+   */
+  globalJwt: JwtGlobalConfig | undefined;
 }

@@ -5,6 +5,7 @@ import { createLogger } from './logger/setup.js';
 import { RedisRateLimitStore } from './middleware/rate-limit/store.js';
 import { RateLimitPlugin } from './middleware/rate-limit/plugin.js';
 import { JwtAuthPlugin } from './middleware/jwt-auth/plugin.js';
+import { JwtAuthRegistry } from './middleware/jwt-auth/registry.js';
 import { MiddlewarePipeline, GatewayPlugin } from './middleware/pipeline.js';
 import { buildServer } from './server.js';
 import { RouteRegistry } from './routing/registry.js';
@@ -71,10 +72,13 @@ async function bootstrap(): Promise<void> {
     // 4. Crear el snapshot de configuración inicial inmutable
     logger.info('Creando snapshot de configuración inicial...');
     const registry = new RouteRegistry(config);
+    const jwtRegistry = new JwtAuthRegistry(config.jwt, logger);
+    jwtRegistry.startAll();
     snapshotRef = {
       current: {
         config,
         registry,
+        jwtRegistry,
         createdAt: new Date().toISOString(),
       },
     };
@@ -86,6 +90,7 @@ async function bootstrap(): Promise<void> {
 
     logger.info('Configurando módulo de Autenticación JWT...');
     const jwtAuthPlugin = new JwtAuthPlugin(logger);
+    jwtAuthPlugin.registry = jwtRegistry;
 
     // Configurar módulo CORS (PRIMER plugin en el pipeline, antes de rate-limit/auth/circuit-breaker)
     logger.info('Configurando módulo CORS...');
@@ -102,7 +107,10 @@ async function bootstrap(): Promise<void> {
 
     if (config.metrics.enabled) {
       logger.info('Configurando módulo de Métricas Prometheus...');
-      metricsPlugin = new MetricsPlugin(config, logger);
+      // Excluir el endpoint de health de las métricas HTTP para no contaminar
+      // la observabilidad del tráfico proxied con requests de health checks.
+      const excludedMetricPaths = config.health?.enabled ? [config.health.path] : [];
+      metricsPlugin = new MetricsPlugin(config, logger, excludedMetricPaths);
       pluginsList.push(metricsPlugin);
     }
 
@@ -116,7 +124,7 @@ async function bootstrap(): Promise<void> {
 
     // 8. Inicializar el módulo de recarga (ConfigReloader)
     const configPath = process.env['CONFIG_PATH'] || './config/gateway.yaml';
-    reloader = new ConfigReloader(configPath, snapshotRef, logger);
+    reloader = new ConfigReloader(configPath, snapshotRef!, logger);
 
     // 9. Levantar el puerto y host del servidor de forma asíncrona
     const { port, host } = config.server;
@@ -162,6 +170,13 @@ async function gracefulShutdown(signal: string): Promise<void> {
       logger.info('Cerrando connection pools de backends...');
       await serverWithPool.poolManager.closeAll();
       logger.info('Connection pools cerrados exitosamente.');
+    }
+
+    // 2.1. Cerrar el registry de JWKS (detiene background refresh)
+    if (snapshotRef) {
+      logger.info('Cerrando registry de JWT (background refresh)...');
+      await snapshotRef.current.jwtRegistry.stopAll();
+      logger.info('Registry JWT detenido exitosamente.');
     }
 
     // 3. Cerrar la conexión con el store de Redis

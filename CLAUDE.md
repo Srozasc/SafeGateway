@@ -85,9 +85,16 @@ Graceful shutdown on `SIGTERM`/`SIGINT`: close Fastify → close Undici pools �
   - `hooks.ts` / `types.ts` — `ProxyLifecycleHooks` interface (`onBeforeRequest`, `onBeforeResponse`, `onError`).
 - **`src/middleware/circuit-breaker/`** — Per-route circuit breaker state machine (`state.ts`), retry interceptor with exponential backoff + full jitter (`retry.ts`), metrics (`metrics.ts`), and plugin wiring (`plugin.ts`).
 - **`src/middleware/rate-limit/`** — Redis fixed-window counter using ioredis pipelines (`store.ts`, `window.ts`) with configurable `fail-open`/`fail-closed`.
-- **`src/middleware/jwt-auth/`** — JWT validation via `jose` (HS256/RS256).
+- **`src/middleware/jwt-auth/`** — JWT validation with dual mode via `jose`:
+  - `plugin.ts`: dispatches between shared-secret (HS256/HS384/HS512) and JWKS (RS256). Reads `routeMatch.effectiveJwt` from snapshot. Errors via `buildErrorResponse` (centralized 401/503 responses with `requestId`).
+  - `jwks-client.ts`: per-issuer JWKS client with state machine (`empty` → `fresh` → `stale` → `expired`). Sync refresh on miss gated by `refreshCooldownSeconds`. Recursive `setTimeout` background refresh. Single-flight via cached `inflight` Promise. Uses native `fetch` + `AbortSignal.timeout`.
+  - `registry.ts`: per-issuer registry of `JwksClient` instances. Provides `getClient(name)` for specific routes and `resolveByIssClaim(iss)` for `issuer: "any"` mode (decode-unsafe mapping only).
+  - `merge.ts`: 3-level precedence (`jwtOverrides[path]` > `routes[].jwt` > `jwt` global) mirroring CORS.
+  - `metrics.ts`: idempotent Prometheus counters (`gateway_jwt_validations_total{result}`, `gateway_jwks_refresh_total{result}`). Registration checks `register.getSingleMetric()` to avoid double-register.
+  - See [specs/safegateway-jwt-jwks-validation.md](specs/safegateway-jwt-jwks-validation.md).
 - **`src/middleware/cors/`** — CORS handling with 3-level precedence (`corsOverrides[path]` > `routes[].cors` > `cors` global). Preflights (OPTIONS + Origin) handled via short-circuit; normal responses get headers via `onBeforeResponse` lifecycle hook. Prometheus counter `gateway_cors_requests_total{decision}`. See [specs/safegateway-plugin-cors.md](specs/safegateway-plugin-cors.md).
 - **`src/middleware/metrics/`** — Prometheus collectors via `prom-client`, with low-cardinality label controls.
+- **`src/middleware/health/`** — Health aggregation endpoint (`GET /health`, path configurable). Registered as a **native Fastify route** (not a `GatewayPlugin`) before proxy routes, so it bypasses the middleware pipeline (no auth, no rate-limit, no circuit-breaker) and never proxies to a backend. Queries each service's `backendPath` in parallel via native `fetch` with `AbortSignal.timeout`. Status codes: 200 if global `ok`/`degraded`, 503 if global `down`. Service name resolution: `route.backendName ?? hostname(target) ?? route.prefix`. `MetricsPlugin` is configured with the `health.path` to exclude it from HTTP metrics. See [specs/safegateway-health-aggregation.md](specs/safegateway-health-aggregation.md).
 - **`src/config/`** — Zod-validated YAML loader, immutable `ConfigSnapshot`, `ConfigReloader` that swaps snapshots atomically (mutex-guarded against reload storms).
 
 ### Key Patterns
@@ -114,13 +121,14 @@ src/
 │   ├── jwt-auth/           # plugin, types
 │   ├── metrics/            # plugin, labels, types
 │   ├── circuit-breaker/    # plugin, state, retry, metrics, types
-│   └── cors/               # plugin, types, origins, headers, merge, metrics
+│   ├── cors/               # plugin, types, origins, headers, merge, metrics
+│   └── health/             # aggregator, handler, types (Health Aggregation endpoint)
 ├── proxy/                  # engine, pool, headers, hooks, types
 └── routing/                # registry, matcher, types
 
 tests/
 ├── unit/                   # config, errors, middleware, proxy, routing
-└── integration/            # proxy, rate-limit, jwt-auth, circuit-breaker, cors, hot-reload
+└── integration/            # proxy, rate-limit, jwt-auth, circuit-breaker, cors, hot-reload, health
 ```
 
 ## Configuration
@@ -133,13 +141,20 @@ Primary config: `config/gateway.yaml` (path overridable via `CONFIG_PATH` env va
 - `logging`: `{ level }` — hot-reloadable
 - `metrics`: `{ enabled, path?, defaultLabels? }` — Prometheus endpoint config
 - `cors`: `{ enabled, origins, methods, allowedHeaders, exposedHeaders, credentials, maxAge }` — CORS global policy (hot-reloadable, see CORS section below)
-- `routes[]`: `{ prefix, target, stripPrefix, rateLimit?, timeout?, circuitBreaker?, cors?, metricsLabel?, backendName? }`
+- `routes[]`: `{ prefix, target, stripPrefix, rateLimit?, timeout?, circuitBreaker?, cors?, jwt?, metricsLabel?, backendName? }`
   - `timeout`: `{ connect, response }` in ms (backend-specific, restart required)
   - `circuitBreaker`: `{ enabled, errorThreshold, requestCount, recoveryTimeMs, halfOpenRequests, maxRetries, retryDelayMs, retryMaxDelayMs }`
   - `cors`: partial CORS override for this route (only specified fields override the global config)
+  - `jwt`: per-route JWT config. **Two modes** (auto-detected by Zod):
+    - `shared-secret` (compat): `{ enabled?, secret, algorithm?, issuer?, audience?, forwardClaims? }` — HS256/HS384/HS512 with local secret.
+    - `jwks`: `{ enabled?, mode: "jwks", issuer, forwardClaims? }` — `issuer` is the name declared in `jwt.issuers[]` or `"any"`.
   - `metricsLabel`/`backendName`: override low-cardinality metric labels
 - `overrides[]`: `{ path, rateLimit }` — exact-path overrides for rate limit (hot-reloadable)
 - `corsOverrides[]`: `{ path, cors }` — exact-path CORS overrides (hot-reloadable, takes precedence over `routes[].cors`)
+- `jwt`: `{ enabled, mode: "shared-secret" | "jwks", issuers[] }` — global JWT config. Required when any route uses JWKS mode.
+  - `issuers[]`: `{ name, jwksUri, issuer, audience?, cacheTtlSeconds=3600, staleGracePeriodSeconds=1800, refreshCooldownSeconds=30, refreshOnMiss=true, timeoutMs=3000 }` — declared JWKS endpoints per issuer.
+- `jwtOverrides[]`: `{ path, jwt }` — exact-path JWT overrides (hot-reloadable, takes precedence over `routes[].jwt`)
+- `health`: `{ enabled, path, backendPath, timeoutMs }` — Health aggregation endpoint config. `path` is the Gateway endpoint (default `/health`), `backendPath` is the health path queried on each downstream service (default `/health`), `timeoutMs` is the per-service timeout (default `2000`). See [specs/safegateway-health-aggregation.md](specs/safegateway-health-aggregation.md).
 
 ### CORS Configuration
 
@@ -184,9 +199,88 @@ corsOverrides:
 
 **Origin matching**: Case-insensitive comparison on `scheme + host + port` (normalized to lowercase). Wildcard `*` accepts any origin but disables `credentials`.
 
+### JWT Configuration
+
+JWT validation supports two modes (auto-detected by Zod per route):
+
+1. **shared-secret (compat)** — HS256/HS384/HS512 with a local secret. No global config required. Each route declares its own `secret` and `algorithm`.
+2. **JWKS (RS256)** — Validates against a remote JWKS endpoint (RFC 7517). Requires a global `jwt.issuers[]` declaration. Multiple issuers can coexist.
+
+Precedencia (mayor a menor):
+
+1. **`jwtOverrides[path=X]`** — path-exact JWT override
+2. **`routes[].jwt`** — per-route JWT config
+3. **`jwt`** (global) — used by JWKS mode routes
+
+```yaml
+jwt:
+  enabled: true
+  mode: jwks                              # "shared-secret" | "jwks"
+  issuers:
+    - name: auth-service-prod
+      jwksUri: https://auth.flashdrop.cl/.well-known/jwks.json
+      issuer: "https://auth.flashdrop.cl" # claim `iss` esperado
+      audience: "flashdrop-api"           # claim `aud` esperado (opcional)
+      cacheTtlSeconds: 3600               # default: 3600 (1h)
+      staleGracePeriodSeconds: 1800       # default: 1800 (30min)
+      refreshCooldownSeconds: 30          # default: 30
+      refreshOnMiss: true                 # default: true
+      timeoutMs: 3000                     # default: 3000
+
+routes:
+  - prefix: /api/orders
+    target: http://orders-service:8084
+    jwt:
+      issuer: auth-service-prod           # ref a jwt.issuers[].name
+  - prefix: /api/public
+    target: http://public-service:8086
+    jwt:
+      issuer: any                         # acepta cualquier issuer registrado
+
+  # Compatibilidad HS256 (no requiere sección global):
+  - prefix: /api/protected
+    target: http://backend:3000
+    jwt:
+      enabled: true
+      secret: ${JWT_SECRET}
+      algorithm: HS256
+```
+
+**Validación al startup (fail-fast)**:
+- `jwksUri` debe ser una URL válida
+- No se permiten nombres de `issuer` duplicados en `jwt.issuers[]`
+- Cada `routes[].jwt.issuer` (≠ "any") debe existir en `jwt.issuers[]`
+- `routes[].jwt.issuer: "any"` requiere que `jwt.issuers[]` tenga al menos un issuer
+
+**State machine del cache JWKS** (por issuer):
+
+- `empty` → nunca se hizo fetch exitoso
+- `fresh` → dentro del TTL (`cacheTtlSeconds`) — sirve directo
+- `stale` → pasó el TTL pero dentro de `staleGracePeriodSeconds` — sirve + dispara background refresh
+- `expired` → pasó ambos — refresh on miss sincrónico (gated por `refreshCooldownSeconds`)
+
+**Status codes**:
+- `401 Unauthorized` — token con firma inválida, expirado, claims incorrectos, `kid` desconocido, `iss`/`aud` no coinciden
+- `503 Service Unavailable` — Auth Service inalcanzable más allá de `staleGracePeriodSeconds` (503 reservado para indisponibilidad de infraestructura; 401 reservado para fallos criptográficos)
+
+### JWT Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `gateway_jwt_validations_total` | Counter | `result` | Validaciones JWT procesadas. `result` ∈ `ok \| missing_token \| unknown_kid \| missing_kid \| expired \| invalid_issuer \| invalid_audience \| invalid_claims \| invalid_signature \| service_unavailable` (10 valores, baja cardinalidad). |
+| `gateway_jwks_refresh_total` | Counter | `result` | Refrescos del endpoint JWKS remoto. `result` ∈ `ok \| error \| cooldown` (3 valores). |
+
+Example PromQL queries:
+- Tasa de validaciones exitosas: `rate(gateway_jwt_validations_total{result="ok"}[5m])`
+- Tasa de 401: `sum(rate(gateway_jwt_validations_total{result=~"expired\|invalid_issuer\|invalid_audience\|invalid_signature\|unknown_kid\|missing_kid"}[5m]))`
+- Tasa de 503 (Auth Service caído): `rate(gateway_jwt_validations_total{result="service_unavailable"}[5m])`
+- Refresh errors: `rate(gateway_jwks_refresh_total{result="error"}[5m])`
+- Cooldown hits (potencial DoS): `rate(gateway_jwks_refresh_total{result="cooldown"}[5m])`
+
 ### Hot Reload (SIGHUP) Behavior
-- **Reloadable without restart**: `routes[].rateLimit`, `routes[].cors`, `overrides`, `cors`, `corsOverrides`, `logging.level`
+- **Reloadable without restart**: `routes[].rateLimit`, `routes[].cors`, `routes[].jwt`, `overrides`, `cors`, `corsOverrides`, `jwt`, `jwtOverrides`, `logging.level`
 - **Require restart** (logged as `warn`, ignored on reload): `server.*`, `redis.*`, `routes[].prefix/target/stripPrefix/timeout`, adding/removing routes
+- **JWKS reloader behavior**: el `JwtAuthRegistry` se reconstruye en cada reload con cambios. El registry viejo se detiene (clear timers + await inflight fetch) antes del swap atómico del snapshot; el nuevo arranca su background refresh inmediatamente después. Los issuers que no cambiaron se recrean como clientes nuevos (sus caches inician vacías; primer request dispara fetch).
 - **Validation first**: invalid YAML/Zod failures abort the reload and the previous snapshot is kept (automatic rollback).
 - **Concurrency guard**: SIGHUP during an in-progress reload is logged and ignored.
 
@@ -213,7 +307,7 @@ corsOverrides:
 ## Observability
 
 - **Logs**: Pino with JSON output; `Authorization` and `Cookie` headers are redacted via serializer.
-- **Metrics**: Prometheus endpoint at `/metrics` (path configurable). Includes Node.js defaults plus custom `gateway_http_*`, `gateway_rate_limit_*`, `gateway_circuit_breaker_*`, `gateway_retries_*`, `gateway_cors_*` metrics. Labels are constrained to low-cardinality values (`metricsLabel`/`backendName` fallbacks).
+- **Metrics**: Prometheus endpoint at `/metrics` (path configurable). Includes Node.js defaults plus custom `gateway_http_*`, `gateway_rate_limit_*`, `gateway_circuit_breaker_*`, `gateway_retries_*`, `gateway_cors_*`, `gateway_jwt_*` metrics. Labels are constrained to low-cardinality values (`metricsLabel`/`backendName` fallbacks).
 - **In-flight safety**: `gateway_http_requests_in_flight` uses a private `Symbol` flag + `socket.once('close')` listener to prevent double-decrement on client aborts (mitigates connection-leak false positives).
 - **Error handler**: 5xx errors return a sanitized JSON envelope; stack traces and internal IPs are never exposed to clients.
 - **Dev tooling** (via `docker-compose.example.yml`): Dozzle (localhost:9999) for live log viewing, Prometheus (localhost:9090), Grafana (localhost:3001) with pre-provisioned "Gateway Overview" dashboard.

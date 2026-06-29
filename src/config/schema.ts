@@ -52,14 +52,104 @@ export const RouteTimeoutConfigSchema = z.object({
     .optional(),
 });
 
-// Esquema para autenticación JWT
-export const JwtAuthConfigSchema = z.object({
+// Esquema para autenticación JWT (HS256/HS384/HS512 con secreto compartido)
+// Esta es la rama "shared-secret" — preserva compatibilidad hacia atrás.
+// Las rutas que usan este modo no requieren la sección global `jwt`.
+export const JwtSharedSecretConfigSchema = z.object({
   enabled: z.boolean().default(true),
   secret: z.string().min(1, 'El secreto JWT no puede estar vacío'),
   algorithm: z.enum(['HS256', 'HS384', 'HS512']).default('HS256'),
   forwardClaims: z
     .array(z.string().min(1, 'Cada claim debe ser un string no vacío'))
     .default(['sub', 'iss', 'aud', 'exp', 'iat', 'jti']),
+  issuer: z.string().min(1, 'El claim iss debe ser un string no vacío').optional(),
+  audience: z.string().min(1, 'El claim aud debe ser un string no vacío').optional(),
+});
+
+// Esquema para autenticación JWT en modo JWKS (RS256 contra endpoint remoto)
+// Requiere que el issuer esté declarado en la sección global `jwt.issuers[]`
+// (excepto cuando `issuer: "any"`, que acepta cualquier issuer registrado).
+export const JwtJwksConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  mode: z.literal('jwks'),
+  issuer: z.string().min(1, 'jwt.issuer debe ser un nombre de issuer o "any"'),
+  forwardClaims: z
+    .array(z.string().min(1, 'Cada claim debe ser un string no vacío'))
+    .default(['sub', 'iss', 'aud', 'exp', 'iat', 'jti']),
+});
+
+// Esquema unificado por ruta — se detecta el modo por la presencia de campos:
+//   - `secret` presente → shared-secret
+//   - `mode: 'jwks'` → JWKS
+export const JwtAuthConfigSchema = z.union([JwtSharedSecretConfigSchema, JwtJwksConfigSchema]);
+
+// Esquema para un issuer JWKS declarado globalmente
+export const JwtIssuerConfigSchema = z.object({
+  name: z.string().min(1, 'El nombre del issuer no puede estar vacío'),
+  jwksUri: z.string().url('jwksUri debe ser una URL válida'),
+  issuer: z.string().min(1, 'El claim iss esperado debe ser un string no vacío'),
+  audience: z.string().min(1, 'El claim aud esperado debe ser un string no vacío').optional(),
+  cacheTtlSeconds: z
+    .number()
+    .int()
+    .positive('cacheTtlSeconds debe ser un entero positivo')
+    .default(3600),
+  staleGracePeriodSeconds: z
+    .number()
+    .int()
+    .nonnegative('staleGracePeriodSeconds debe ser un entero no negativo')
+    .default(1800),
+  refreshCooldownSeconds: z
+    .number()
+    .int()
+    .nonnegative('refreshCooldownSeconds debe ser un entero no negativo')
+    .default(30),
+  refreshOnMiss: z.boolean().default(true),
+  timeoutMs: z
+    .number()
+    .int()
+    .positive('timeoutMs debe ser un entero positivo')
+    .default(3000),
+});
+
+// Esquema para la sección global `jwt` (modo JWKS + lista de issuers)
+export const JwtGlobalConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    mode: z.enum(['shared-secret', 'jwks']).default('shared-secret'),
+    issuers: z.array(JwtIssuerConfigSchema).default([]),
+  })
+  .superRefine((val, ctx) => {
+    if (val.mode === 'jwks' && val.issuers.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['issuers'],
+        message: 'jwt.mode="jwks" requiere al menos un issuer declarado en jwt.issuers[]',
+      });
+    }
+    const seen = new Set<string>();
+    for (const [i, iss] of val.issuers.entries()) {
+      if (seen.has(iss.name)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['issuers', i, 'name'],
+          message: `duplicate issuer name "${iss.name}"`,
+        });
+      }
+      seen.add(iss.name);
+    }
+  });
+
+// Esquema para los overrides por path exacto (mirror de corsOverrides)
+export const JwtOverrideConfigSchema = z.object({
+  path: z
+    .string()
+    .refine((val) => val.startsWith('/'), 'El path del override JWT debe comenzar con "/"')
+    .refine(
+      (val) => val === '/' || !val.endsWith('/'),
+      'El path del override JWT no debe terminar con "/" (excepto si es la raíz "/")',
+    ),
+  jwt: JwtAuthConfigSchema,
 });
 
 // Esquema para Circuit Breaker
@@ -192,6 +282,33 @@ export const MetricsConfigSchema = z
     defaultLabels: {},
   });
 
+// Esquema para el endpoint de Health Aggregation
+// Permite consultar el estado de todos los backends declarados en routes[]
+// y agregarlos en una única respuesta JSON.
+export const HealthConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    path: z
+      .string()
+      .startsWith('/', 'El path de health debe comenzar con "/"')
+      .default('/health'),
+    backendPath: z
+      .string()
+      .startsWith('/', 'El backendPath de health debe comenzar con "/"')
+      .default('/health'),
+    timeoutMs: z
+      .number()
+      .int()
+      .positive('El timeoutMs de health debe ser un entero positivo')
+      .default(2000),
+  })
+  .default({
+    enabled: true,
+    path: '/health',
+    backendPath: '/health',
+    timeoutMs: 2000,
+  });
+
 // Esquema principal de configuración del Gateway
 export const GatewayConfigSchema = z.object({
   server: ServerConfigSchema.default({ port: 3000, host: '0.0.0.0' }),
@@ -204,4 +321,10 @@ export const GatewayConfigSchema = z.object({
   cors: CorsConfigSchema.optional(),
   // --- CORS overrides por path exacto ---
   corsOverrides: z.array(CorsOverrideConfigSchema).optional(),
+  // --- JWT global (modo JWKS + lista de issuers) ---
+  jwt: JwtGlobalConfigSchema.optional(),
+  // --- JWT overrides por path exacto (mirror corsOverrides) ---
+  jwtOverrides: z.array(JwtOverrideConfigSchema).optional(),
+  // --- Health Aggregation ---
+  health: HealthConfigSchema.optional(),
 });

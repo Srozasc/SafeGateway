@@ -1,6 +1,7 @@
 import { Logger } from 'pino';
 import { loadConfig } from './loader.js';
 import { RouteRegistry } from '../routing/registry.js';
+import { JwtAuthRegistry } from '../middleware/jwt-auth/registry.js';
 import { GatewayConfig, ConfigSnapshot, ReloadResult } from './types.js';
 
 export class ConfigReloader {
@@ -39,7 +40,8 @@ export class ConfigReloader {
       // 1. Cargar, interpolar y validar el archivo YAML
       // loadConfig maneja la lectura, interpolación y validación con Zod
       const newConfig = loadConfig(this.configPath);
-      const oldConfig = this.snapshotRef.current.config;
+      const oldSnapshot = this.snapshotRef.current;
+      const oldConfig = oldSnapshot.config;
 
       // 2. Comparar diferencias entre la configuración vieja y la nueva
       const { applied, ignored } = this.detectChanges(oldConfig, newConfig);
@@ -54,18 +56,30 @@ export class ConfigReloader {
         return { success: true, applied: [], ignored };
       }
 
-      // 4. Construir un nuevo ConfigSnapshot atómicamente
+      // 4. Construir nuevo RouteRegistry y JwtAuthRegistry
       const newRegistry = new RouteRegistry(newConfig);
+      const newJwtRegistry = new JwtAuthRegistry(newConfig.jwt, this.logger);
+
+      // 5. Construir un nuevo ConfigSnapshot
       const newSnapshot: ConfigSnapshot = {
         config: newConfig,
         registry: newRegistry,
+        jwtRegistry: newJwtRegistry,
         createdAt: new Date().toISOString(),
       };
 
-      // 5. Swap atómico de la referencia
+      // 6. Detener el registry viejo (libera timers y fetches en vuelo)
+      //    Lo hacemos ANTES del swap para que no haya requests viejos usando el registry viejo
+      //    una vez que el snapshot haya sido reemplazado.
+      await oldSnapshot.jwtRegistry.stopAll();
+
+      // 7. Swap atómico de la referencia
       this.snapshotRef.current = newSnapshot;
 
-      // 6. Aplicar cambios dinámicos adicionales (logging level)
+      // 8. Arrancar background refresh de los nuevos issuers
+      newJwtRegistry.startAll();
+
+      // 9. Aplicar cambios dinámicos adicionales (logging level)
       if (oldConfig.logging.level !== newConfig.logging.level) {
         this.logger.level = newConfig.logging.level;
       }
@@ -152,6 +166,11 @@ export class ConfigReloader {
         applied.push(`routes[${i}].rateLimit`);
       }
 
+      // El JWT SÍ se puede recargar (cambio de modo/issuer se refleja vía nuevo snapshot)
+      if (JSON.stringify(oldRoute.jwt) !== JSON.stringify(newRoute.jwt)) {
+        applied.push(`routes[${i}].jwt`);
+      }
+
       // Los timeouts NO se pueden recargar porque van en el binding undici
       if (JSON.stringify(oldRoute.timeout) !== JSON.stringify(newRoute.timeout)) {
         ignored.push(`routes[${i}].timeout`);
@@ -171,6 +190,16 @@ export class ConfigReloader {
     // --- Sección corsOverrides (path-exact) ---
     if (JSON.stringify(oldConfig.corsOverrides) !== JSON.stringify(newConfig.corsOverrides)) {
       applied.push('corsOverrides');
+    }
+
+    // --- Sección JWT global (issuers + mode) ---
+    if (JSON.stringify(oldConfig.jwt) !== JSON.stringify(newConfig.jwt)) {
+      applied.push('jwt');
+    }
+
+    // --- Sección jwtOverrides (path-exact) ---
+    if (JSON.stringify(oldConfig.jwtOverrides) !== JSON.stringify(newConfig.jwtOverrides)) {
+      applied.push('jwtOverrides');
     }
 
     // --- Sección CORS por ruta ---

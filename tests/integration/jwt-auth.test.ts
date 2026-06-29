@@ -75,7 +75,7 @@ describe('JWT Authentication Integration Tests', () => {
     const body = JSON.parse(response.body);
     expect(body).toMatchObject({
       error: 'Unauthorized',
-      message: 'Token de autenticación requerido.',
+      message: 'token de autenticación requerido',
       statusCode: 401,
     });
 

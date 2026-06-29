@@ -3,15 +3,18 @@ import { Logger } from 'pino';
 import { register } from 'prom-client';
 import { GatewayConfig, ConfigSnapshot } from './config/types.js';
 import { RouteRegistry } from './routing/registry.js';
+import { JwtAuthRegistry } from './middleware/jwt-auth/registry.js';
 import { MiddlewarePipeline, createProxyHandler } from './middleware/pipeline.js';
 import { registerErrorHandler } from './errors/handler.js';
 import { MetricsPlugin } from './middleware/metrics/plugin.js';
 import { ConnectionPoolManager } from './proxy/pool.js';
+import { createHealthHandler } from './middleware/health/index.js';
 
 // Declarar el decorator en el tipo FastifyInstance
 declare module 'fastify' {
   interface FastifyInstance {
     routeRegistry: RouteRegistry;
+    jwtAuthRegistry: JwtAuthRegistry;
   }
 }
 
@@ -47,6 +50,7 @@ export function buildServer(
     current: {
       config,
       registry: new RouteRegistry(config),
+      jwtRegistry: new JwtAuthRegistry(config.jwt, logger),
       createdAt: new Date().toISOString(),
     },
   };
@@ -54,6 +58,12 @@ export function buildServer(
   // 2. Almacenar el RouteRegistry de forma reactiva en la instancia del servidor
   Object.defineProperty(server, 'routeRegistry', {
     get: () => finalSnapshotRef.current.registry,
+    enumerable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(server, 'jwtAuthRegistry', {
+    get: () => finalSnapshotRef.current.jwtRegistry,
     enumerable: true,
     configurable: true,
   });
@@ -82,6 +92,16 @@ export function buildServer(
     server.get(metricsPath, async (_request, reply) => {
       reply.header('Content-Type', register.contentType).send(await register.metrics());
     });
+  }
+
+  // 3.3. Registrar endpoint /health nativo (no-proxy) antes de las rutas proxy
+  // Se registra como ruta nativa (no como GatewayPlugin) para que:
+  //  - bypassa el pipeline de middlewares (auth, rate-limit, circuit-breaker)
+  //  - nunca se proxia a un backend
+  //  - lee `routes[]` del snapshot vivo, por lo que respeta SIGHUP
+  if (config.health?.enabled) {
+    const healthPath = config.health.path || '/health';
+    server.get(healthPath, createHealthHandler(finalSnapshotRef, logger));
   }
 
   // 4. Crear el ConnectionPoolManager para los backends

@@ -32,7 +32,13 @@
       "Bash(rm -f /c/Users/ASUSTU~1/AppData/Local/Temp/cors-debug.log; pnpm exec vitest run tests/integration/cors.test.ts --reporter=verbose 2>&1 | tail -30)",
       "Bash(pnpm lint *)",
       "Bash(pnpm test:coverage)",
-      "Bash(pnpm test:coverage --reporter=text)"
+      "Bash(pnpm test:coverage --reporter=text)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm vitest *)",
+      "Bash(pnpm test:unit -- tests/unit/middleware/jwt-auth.test.ts)",
+      "Bash(pnpm test:unit -- tests/unit/config/reloader.test.ts)",
+      "Bash(pnpm test:integration -- tests/integration/jwt-jwks.test.ts)",
+      "Bash(DEBUG=* pnpm test:integration -- tests/integration/jwt-jwks.test.ts -t \"BDD 1\")"
     ],
     "additionalDirectories": [
       "\\tmp",

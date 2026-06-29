@@ -52,6 +52,17 @@ describe('JwtAuthPlugin', () => {
       override: null,
       effectiveRateLimit: null,
       effectiveCors: null,
+      effectiveJwt: {
+        kind: 'shared-secret',
+        config: {
+          enabled: true,
+          secret: SECRET_KEY,
+          algorithm: 'HS256',
+          forwardClaims: ['sub', 'iss', 'aud', 'exp', 'iat', 'jti', 'role', 'tenant_id'],
+        },
+      },
+      jwtOverride: null,
+      globalJwt: undefined,
     };
 
     mockRequest.gatewayContext.routeMatch = mockRouteMatch;
@@ -74,6 +85,7 @@ describe('JwtAuthPlugin', () => {
 
   it('debería ser un no-op si la ruta no tiene configuración JWT', async () => {
     delete mockRouteMatch.route.jwt;
+    mockRouteMatch.effectiveJwt = { kind: 'public' };
     const ctx: RequestContext = {
       request: mockRequest,
       reply: mockReply,
@@ -90,6 +102,7 @@ describe('JwtAuthPlugin', () => {
     if (mockRouteMatch.route.jwt) {
       mockRouteMatch.route.jwt.enabled = false;
     }
+    mockRouteMatch.effectiveJwt = { kind: 'public' };
     const ctx: RequestContext = {
       request: mockRequest,
       reply: mockReply,
@@ -114,9 +127,9 @@ describe('JwtAuthPlugin', () => {
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
     expect(mockReply.body).toMatchObject({
-      error: 'Unauthorized',
-      message: 'Token de autenticación requerido.',
       statusCode: 401,
+      error: 'Unauthorized',
+      message: 'token de autenticación requerido',
     });
   });
 
@@ -132,7 +145,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body?.message).toBe('Token de autenticación requerido.');
+    expect(mockReply.body?.message).toBe('token de autenticación requerido');
   });
 
   it('debería retornar HTTP 401 si el token tiene una firma inválida', async () => {
@@ -152,7 +165,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body?.message).toBe('Token de autenticación inválido o expirado.');
+    expect(mockReply.body?.message).toBe('token de autenticación inválido o expirado');
   });
 
   it('debería retornar HTTP 401 si el token está expirado', async () => {
@@ -170,7 +183,7 @@ describe('JwtAuthPlugin', () => {
 
     expect(mockReply.sent).toBe(true);
     expect(mockReply.statusCode).toBe(401);
-    expect(mockReply.body?.message).toBe('Token de autenticación inválido o expirado.');
+    expect(mockReply.body?.message).toBe('token de autenticación inválido o expirado');
   });
 
   it('debería retornar HTTP 401 si el token usa un algoritmo diferente al configurado', async () => {

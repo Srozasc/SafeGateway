@@ -15,6 +15,13 @@ metrics:
   defaultLabels:
     environment: development
 
+# Endpoint agregado de Health Aggregation (consulta cada target/<backendPath> en paralelo).
+health:
+  enabled: true
+  path: /health
+  backendPath: /health
+  timeoutMs: 2000
+
 routes:
   # ===============================================================
   # Ruta Pública (Redirige al Backend Mock)

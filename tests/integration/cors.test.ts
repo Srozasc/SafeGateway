@@ -44,10 +44,13 @@ describe('CORS Integration Tests', () => {
     const { loadConfig } = await import('../../src/config/loader.js');
     const config = loadConfig(tmpConfigPath);
     const registry = new RouteRegistry(config);
+    const { JwtAuthRegistry } = await import('../../src/middleware/jwt-auth/registry.js');
+    const jwtRegistry = new JwtAuthRegistry(config.jwt, logger);
     snapshotRef = {
       current: {
         config,
         registry,
+        jwtRegistry,
         createdAt: new Date().toISOString(),
       },
     };

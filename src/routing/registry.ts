@@ -1,12 +1,15 @@
-import { GatewayConfig, RouteConfig, OverrideConfig, CorsConfig } from '../config/types.js';
+import { GatewayConfig, RouteConfig, OverrideConfig, CorsConfig, JwtAuthConfig, JwtGlobalConfig } from '../config/types.js';
 import { RouteMatch } from './types.js';
 import { mergeCorsConfigs } from '../middleware/cors/merge.js';
+import { mergeJwtAuth, indexJwtOverrides } from '../middleware/jwt-auth/merge.js';
 
 export class RouteRegistry {
   private readonly routes: RouteConfig[];
   private readonly overrides: Map<string, OverrideConfig>;
   private readonly corsOverrides: Map<string, CorsConfig>;
+  private readonly jwtOverrides: Map<string, JwtAuthConfig>;
   private readonly globalCors: CorsConfig | undefined;
+  private readonly globalJwt: JwtGlobalConfig | undefined;
 
   constructor(config: GatewayConfig) {
     // Ordenar las rutas por longitud de prefijo de forma descendente (el prefijo más largo primero)
@@ -29,8 +32,14 @@ export class RouteRegistry {
       }
     }
 
+    // JWT path-exact overrides (jwtOverrides[])
+    this.jwtOverrides = indexJwtOverrides(config.jwtOverrides);
+
     // CORS global (puede ser undefined)
     this.globalCors = config.cors;
+
+    // JWT global (puede ser undefined)
+    this.globalJwt = config.jwt;
   }
 
   /**
@@ -49,6 +58,9 @@ export class RouteRegistry {
 
     // 3. Buscar override exacto de CORS
     const corsOverride = this.corsOverrides.get(pathWithoutQuery) || null;
+
+    // 3.1. Buscar override exacto de JWT
+    const jwtOverride = this.jwtOverrides.get(pathWithoutQuery) || null;
 
     // 4. Buscar la ruta correspondiente por prefijo
     // Como las rutas están ordenadas de mayor a menor longitud, la primera coincidencia es la más específica
@@ -85,11 +97,17 @@ export class RouteRegistry {
         ? mergeCorsConfigs(this.globalCors, route.cors, corsOverride)
         : null;
 
+    // Determinar el JWT efectivo (precedencia 3 niveles)
+    const effectiveJwt = mergeJwtAuth(route.jwt, jwtOverride, this.globalJwt);
+
     return {
       route,
       override,
       effectiveRateLimit,
       effectiveCors,
+      effectiveJwt,
+      jwtOverride,
+      globalJwt: this.globalJwt,
     };
   }
 
@@ -115,6 +133,13 @@ export class RouteRegistry {
   }
 
   /**
+   * Obtiene el mapa interno de jwtOverrides (útil para inspección y debugging).
+   */
+  public getJwtOverrides(): ReadonlyMap<string, JwtAuthConfig> {
+    return this.jwtOverrides;
+  }
+
+  /**
    * Obtiene todos los matches de rutas ordenados de más específico a menos específico.
    * Útil para registrar todas las rutas en el servidor.
    */
@@ -124,6 +149,9 @@ export class RouteRegistry {
       override: this.overrides.get(route.prefix) || null,
       effectiveRateLimit: route.rateLimit || null,
       effectiveCors: route.cors || this.globalCors ? mergeCorsConfigs(this.globalCors, route.cors) : null,
+      effectiveJwt: mergeJwtAuth(route.jwt, null, this.globalJwt),
+      jwtOverride: null,
+      globalJwt: this.globalJwt,
     }));
   }
 }

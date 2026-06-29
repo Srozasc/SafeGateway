@@ -145,6 +145,70 @@
         "defaultLabels": {}
       }
     },
+    "health": {
+      "type": "object",
+      "description": "Configuración del endpoint agregado de Health Aggregation. Consulta en paralelo el backendPath configurado en cada servicio declarado en routes[] y devuelve un estado agregado con código HTTP apropiado.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "description": "Habilitar/deshabilitar el endpoint de health agregado."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": true
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^/",
+              "description": "Path HTTP donde se expone el endpoint de health en el Gateway (por ejemplo, '/health')."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "/health"
+        },
+        "backendPath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^/",
+              "description": "Path del endpoint de health en cada servicio downstream (por ejemplo, '/health' o '/internal/health')."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": "/health"
+        },
+        "timeoutMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Timeout en milisegundos para la consulta de health a cada servicio. Si se agota, el servicio se marca como 'down'."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": 2000
+        }
+      },
+      "default": {
+        "enabled": true,
+        "path": "/health",
+        "backendPath": "/health",
+        "timeoutMs": 2000
+      }
+    },
     "routes": {
       "type": "array",
       "description": "Lista de rutas declarativas que el Gateway intercepta y reenvía a backends.",
@@ -225,7 +289,8 @@
             }
           },
           "jwt": {
-            "$ref": "#/definitions/jwtConfig"
+            "$ref": "#/definitions/jwtRouteConfig",
+            "description": "Bloque de configuración JWT por ruta. Si está ausente o `enabled=false`, la ruta es pública. Detección automática de modo (shared-secret vs JWKS)."
           },
           "metricsLabel": {
             "anyOf": [
@@ -277,6 +342,36 @@
           }
         }
       }
+    },
+    "jwt": {
+      "$ref": "#/definitions/jwtGlobalConfig",
+      "description": "Configuración global de JWT (modo JWKS + lista de issuers). Opcional — solo requerida cuando alguna ruta usa modo JWKS."
+    },
+    "jwtOverrides": {
+      "type": "array",
+      "description": "Overrides de JWT por path exacto (mayor prioridad que routes[].jwt).",
+      "items": {
+        "type": "object",
+        "required": ["path", "jwt"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^/",
+                "description": "Path exacto al que se le aplicará el override JWT. Debe comenzar con '/'."
+              },
+              {
+                "$ref": "#/definitions/envVar"
+              }
+            ]
+          },
+          "jwt": {
+            "$ref": "#/definitions/jwtRouteConfig"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -319,8 +414,7 @@
     },
     "jwtConfig": {
       "type": "object",
-      "description": "Configuración de Autenticación y Validación de tokens JWT por ruta.",
-      "required": ["secret"],
+      "description": "Configuración de Autenticación y Validación de tokens JWT en modo shared-secret (HS256/HS384/HS512). Para modo JWKS usa jwtRouteConfig.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -360,6 +454,30 @@
           ],
           "default": "HS256"
         },
+        "issuer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Claim `iss` esperado (opcional)."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
+        "audience": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Claim `aud` esperado (opcional)."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
         "forwardClaims": {
           "anyOf": [
             {
@@ -374,6 +492,141 @@
               "$ref": "#/definitions/envVar"
             }
           ]
+        }
+      }
+    },
+    "jwtJwksRouteConfig": {
+      "type": "object",
+      "description": "Configuración JWT por ruta en modo JWKS (RS256 contra endpoint remoto). Requiere que el issuer esté declarado en jwt.issuers[] o usar `issuer: \"any\"`.",
+      "required": ["mode", "issuer"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean",
+              "description": "Indica si la validación JWT está activa en esta ruta."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": true
+        },
+        "mode": {
+          "const": "jwks",
+          "description": "Modo JWKS — el plugin resolverá la clave pública desde el endpoint JWKS remoto."
+        },
+        "issuer": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Nombre del issuer declarado en jwt.issuers[].name, o la cadena literal 'any' para aceptar cualquier issuer registrado (mapeo por iss claim)."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ]
+        },
+        "forwardClaims": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Lista de claims a inyectar como cabeceras hacia el backend."
+        }
+      }
+    },
+    "jwtRouteConfig": {
+      "description": "Configuración JWT por ruta — unión discriminada entre shared-secret y JWKS. El plugin detecta el modo por presencia de campos (shared-secret si tiene `secret`; jwks si tiene `mode: 'jwks'`).",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/jwtConfig"
+        },
+        {
+          "$ref": "#/definitions/jwtJwksRouteConfig"
+        }
+      ]
+    },
+    "jwtIssuerConfig": {
+      "type": "object",
+      "description": "Configuración de un issuer JWKS declarado en jwt.issuers[].",
+      "required": ["name", "jwksUri", "issuer"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nombre único del issuer dentro de jwt.issuers[]. Las rutas referencian por este nombre."
+        },
+        "jwksUri": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL del endpoint JWKS (RFC 7517) — debe devolver un JSON con el array `keys`."
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Claim `iss` esperado en los tokens emitidos por este issuer."
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Claim `aud` esperado (opcional)."
+        },
+        "cacheTtlSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3600,
+          "description": "TTL del cache JWKS antes de marcarlo como stale (default: 3600 = 1h)."
+        },
+        "staleGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1800,
+          "description": "Ventana de gracia adicional para servir claves stale si el refresh falla (default: 1800 = 30min)."
+        },
+        "refreshCooldownSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30,
+          "description": "Tiempo mínimo entre refreshes síncronos (mitigación DoS, default: 30s)."
+        },
+        "refreshOnMiss": {
+          "type": "boolean",
+          "default": true,
+          "description": "Si true, dispara un refresh síncrono cuando un kid no está en cache (gated por cooldown)."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3000,
+          "description": "Timeout HTTP para fetches JWKS (default: 3000ms)."
+        }
+      }
+    },
+    "jwtGlobalConfig": {
+      "type": "object",
+      "description": "Configuración global de JWT — modo + lista de issuers (JWKS).",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Habilitar/deshabilitar la sección global JWT."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["shared-secret", "jwks"],
+          "default": "shared-secret",
+          "description": "Modo de validación por defecto cuando las rutas referencian la sección global."
+        },
+        "issuers": {
+          "type": "array",
+          "default": [],
+          "description": "Lista de issuers JWKS disponibles para las rutas en modo JWKS.",
+          "items": {
+            "$ref": "#/definitions/jwtIssuerConfig"
+          }
         }
       }
     }

@@ -14,6 +14,7 @@ Un API Gateway robusto, modular, configurable e inmutable desarrollado en **Type
 * **Configuración Declarativa Inmutable**: Lector de archivos YAML/JSON con validación estricta de esquemas mediante **Zod** y soporte para interpolación segura de variables de entorno (`${ENV_VAR}`).
 * **Registro de Logs Estructurados**: Integración nativa de **Pino** con serializadores de peticiones, respuestas y errores redactando automáticamente información sensible (tokens `Authorization`, cookies, etc.).
 * **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onBeforeResponse`, `onAfterResponse` y `onError` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
+* **Endpoint de Health Aggregation**: `GET /health` que consulta en paralelo el endpoint de salud de cada servicio downstream declarado en `routes[]` y devuelve un estado agregado (`ok` / `degraded` / `down`) con código HTTP apropiado. Ideal para load balancers, Kubernetes readiness probes y herramientas de monitoreo. No requiere autenticación, no consume rate-limit y se excluye de las métricas HTTP para no contaminar la observabilidad del tráfico real.
 * **Despliegue Contenerizado**: Optimizado mediante una compilación Docker *multi-stage* ultra-ligera (basada en `node:20-alpine`) e instrumentado con chequeos de salud (`HEALTHCHECK`) nativos de red.
 
 ---
@@ -231,6 +232,106 @@ corsOverrides:
 - **Request sin `Origin`** → server-to-server, no se afecta
 - **Comparación de origines**: case-insensitive sobre `scheme + host + port` (normalizado a lowercase)
 
+### 🔐 Configuración de JWT (HS256/HS384/HS512 + JWKS RS256)
+
+El plugin JWT soporta **dos modos** que pueden coexistir en distintas rutas:
+
+#### Modo 1: Shared-Secret (HS256/HS384/HS512) — Compatibilidad
+
+Cada ruta define su propio secreto local. No requiere sección global `jwt`. **Backward compatible** con configuraciones existentes.
+
+```yaml
+routes:
+  - prefix: /api/protected
+    target: http://backend:3000
+    jwt:
+      enabled: true
+      secret: ${JWT_SECRET}
+      algorithm: HS256          # default; HS384, HS512 también soportados
+      issuer: "flashdrop-api"   # claim `iss` esperado (opcional)
+      audience: "flashdrop-api" # claim `aud` esperado (opcional)
+```
+
+#### Modo 2: JWKS (RS256) — Multi-tenant con claves públicas remotas
+
+Las rutas referencian por nombre a un issuer declarado en `jwt.issuers[]`. El Gateway descubre claves públicas vía endpoint JWKS (RFC 7517), las cachea con TTL, y soporta múltiples issuers simultáneos (multi-tenant / multi-entorno).
+
+```yaml
+jwt:                            # Sección global
+  enabled: true
+  mode: jwks                    # "shared-secret" | "jwks"
+  issuers:
+    - name: auth-service-prod
+      jwksUri: https://auth.flashdrop.cl/.well-known/jwks.json
+      issuer: "https://auth.flashdrop.cl"   # claim `iss` esperado
+      audience: "flashdrop-api"             # claim `aud` esperado (opcional)
+      cacheTtlSeconds: 3600                 # TTL del cache (default: 1h)
+      staleGracePeriodSeconds: 1800         # ventana de gracia (default: 30min)
+      refreshCooldownSeconds: 30            # cooldown entre refreshes sync (default: 30s)
+      refreshOnMiss: true                   # refresh on miss sincronico (default: true)
+      timeoutMs: 3000                       # timeout HTTP al JWKS endpoint (default: 3000)
+
+    - name: auth-service-staging
+      jwksUri: https://auth-staging.flashdrop.cl/.well-known/jwks.json
+      issuer: "https://auth-staging.flashdrop.cl"
+
+routes:
+  - prefix: /api/orders
+    target: http://orders-service:8084
+    jwt:
+      issuer: auth-service-prod  # Referencia al issuer global por nombre
+
+  - prefix: /api/public
+    target: http://public-service:8086
+    jwt:
+      issuer: any                # Acepta tokens de cualquier issuer registrado
+                                 # (mapeo via decode-unsafe del claim `iss`)
+
+  - prefix: /api/auth/login       # Ruta explícitamente pública
+    target: http://auth-service:8082
+    jwt:
+      enabled: false
+
+jwtOverrides:                    # Path-exact overrides (mayor prioridad que routes[].jwt)
+  - path: /api/health
+    jwt:
+      enabled: false             # Health checks públicos
+```
+
+**Validación fail-fast al startup**:
+- `jwksUri` debe ser una URL válida
+- No se permiten nombres de `issuer` duplicados
+- Cada `routes[].jwt.issuer` (≠ "any") debe existir en `jwt.issuers[]`
+- `routes[].jwt.issuer: "any"` requiere al menos un issuer configurado
+
+**State machine del cache JWKS** (por issuer):
+- `fresh` → dentro del TTL, sirve directo (latencia <5ms p99)
+- `stale` → pasó TTL pero dentro de `staleGracePeriodSeconds`, sirve + background refresh
+- `expired` → pasó ambos, refresh on miss síncrono (gated por `refreshCooldownSeconds`)
+- `401 Unauthorized` — firma inválida, expired, claims incorrectos, kid desconocido
+- `503 Service Unavailable` — Auth Service caído más allá de stale grace
+
+#### Métricas de JWT
+
+| Métrica | Tipo | Labels | Descripción |
+|---------|------|--------|-------------|
+| `gateway_jwt_validations_total` | Counter | `result` | Validaciones JWT. `result` ∈ `ok \| missing_token \| unknown_kid \| missing_kid \| expired \| invalid_issuer \| invalid_audience \| invalid_claims \| invalid_signature \| service_unavailable` |
+| `gateway_jwks_refresh_total` | Counter | `result` | Refrescos JWKS. `result` ∈ `ok \| error \| cooldown` |
+
+```promql
+# Tasa de validaciones exitosas
+rate(gateway_jwt_validations_total{result="ok"}[5m])
+
+# Tasa de 401 (cualquier fallo criptográfico)
+sum(rate(gateway_jwt_validations_total{result=~"expired|invalid_issuer|invalid_audience|invalid_signature|unknown_kid|missing_kid"}[5m]))
+
+# Tasa de 503 (Auth Service caído)
+rate(gateway_jwt_validations_total{result="service_unavailable"}[5m])
+
+# Refresh errors
+rate(gateway_jwks_refresh_total{result="error"}[5m])
+```
+
 ### 💡 Interpolación de Variables de Entorno
 Cualquier campo del archivo YAML puede contener expresiones del tipo `${NOMBRE_VARIABLE}`. El Gateway las reemplazará automáticamente en tiempo de arranque utilizando los valores de `process.env`. Si una variable requerida en el YAML no está definida en el entorno, el Gateway **fallará rápido** lanzando una excepción `MissingEnvVarError` para evitar arranques inconsistentes.
 
@@ -301,6 +402,112 @@ Content-Type: application/json
   "message": "El servicio /api no está disponible temporalmente. Inténtalo de nuevo más tarde.",
   "retryAfter": 28
 }
+```
+
+---
+
+## 🩺 Health Aggregation (Endpoint `/health`)
+
+SafeGateway expone un endpoint nativo `GET /health` (path configurable) que **agrega el estado de todos los servicios downstream** declarados en `routes[]`. Está pensado para ser consumido por load balancers, Kubernetes readiness probes y herramientas de monitoreo como **un único punto de consulta** para conocer la salud de las dependencias del gateway.
+
+> ⚠️ **Importante**: Este endpoint está diseñado como **readiness probe**, no como **liveness probe**. Su propósito es indicar si las dependencias están operativas, no si el proceso del gateway está vivo (para eso usar `/metrics` y métricas de proceso, o un `HEALTHCHECK` nativo de Docker).
+
+### Características clave
+
+- **Sin autenticación ni rate limiting**: el endpoint se registra como ruta nativa de Fastify **antes** de las rutas de proxy, por lo que bypassa el pipeline de middlewares.
+- **Sin proxy**: nunca se reenvía a un backend. Lee directamente la lista de servicios desde `routes[]`.
+- **Consultas paralelas**: usa `Promise.all` con `fetch` nativo + `AbortSignal.timeout(timeoutMs)`. La latencia total ≈ `timeoutMs` + overhead, **no se acumula** por cantidad de servicios.
+- **Excluido de métricas HTTP**: `MetricsPlugin` se configura dinámicamente para no contar requests a `/health` en `gateway_http_requests_total` ni en el histograma de latencia.
+- **Refleja SIGHUP**: la lista de servicios se lee del snapshot vivo, por lo que añadir/quitar rutas vía hot-reload se ve reflejado sin reiniciar.
+
+### Configuración
+
+```yaml
+health:
+  enabled: true           # Habilita el endpoint /health (default: true)
+  path: "/health"         # Path del endpoint en el Gateway (default: /health)
+  backendPath: "/health"  # Path del health en cada servicio downstream (default: /health)
+  timeoutMs: 2000         # Timeout por servicio en ms (default: 2000)
+```
+
+### Formato de Respuesta
+
+#### Caso 1: Todos los servicios OK → HTTP 200
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-06-28T14:30:00.123Z",
+  "services": [
+    { "name": "auth-service",    "status": "ok",       "latencyMs": 12, "statusCode": 200 },
+    { "name": "catalog-service", "status": "ok",       "latencyMs": 23, "statusCode": 200 },
+    { "name": "orders-service",  "status": "ok",       "latencyMs": 18, "statusCode": 200 }
+  ]
+}
+```
+
+#### Caso 2: Un servicio DOWN → HTTP 503
+
+```json
+{
+  "status": "down",
+  "timestamp": "2026-06-28T14:30:00.123Z",
+  "services": [
+    { "name": "auth-service",    "status": "ok",   "latencyMs": 12,   "statusCode": 200 },
+    { "name": "catalog-service", "status": "down", "latencyMs": 2000, "error": "timeout after 2000ms" },
+    { "name": "orders-service",  "status": "ok",   "latencyMs": 18,   "statusCode": 200 }
+  ]
+}
+```
+
+#### Caso 3: Un servicio DEGRADED (4xx) → HTTP 200
+
+```json
+{
+  "status": "degraded",
+  "timestamp": "2026-06-28T14:30:00.123Z",
+  "services": [
+    { "name": "auth-service",    "status": "ok",       "latencyMs": 12, "statusCode": 200 },
+    { "name": "catalog-service", "status": "degraded", "latencyMs": 8,  "statusCode": 401, "error": "backend returned 401" },
+    { "name": "orders-service",  "status": "ok",       "latencyMs": 18, "statusCode": 200 }
+  ]
+}
+```
+
+### Reglas de clasificación
+
+| Status del backend | Estado del servicio | Estado global posible | HTTP code |
+|---|---|---|---|
+| `2xx` / `3xx` | `ok` | `ok` | 200 |
+| `4xx` | `degraded` | `degraded` | 200 |
+| `5xx` | `down` | `down` | 503 |
+| Timeout / `ECONNREFUSED` / `ENOTFOUND` | `down` | `down` | 503 |
+
+**Estado global** se calcula así:
+- Cualquier servicio `down` → global `down` (HTTP 503)
+- Si no hay `down` pero hay `degraded` → global `degraded` (HTTP 200)
+- Todos `ok` → global `ok` (HTTP 200)
+
+El HTTP 200 en `degraded` es **deliberado**: permite mantener al gateway en el pool de balanceadores cuando solo hay degradación parcial.
+
+### Nombre de servicio
+
+El campo `name` de cada servicio se resuelve con esta prioridad:
+1. `route.backendName` (config explícita)
+2. `hostname(route.target)` (extraído de la URL del target)
+3. `route.prefix` (fallback)
+
+### Ejemplo de uso con curl
+
+```bash
+# Quick check
+curl -s http://localhost:3000/health | jq
+
+# Solo el status global y los servicios caídos
+curl -s http://localhost:3000/health | jq '{status, down: .services | map(select(.status == "down"))}'
+
+# Watch continuo
+watch -n 5 'curl -s http://localhost:3000/health | jq ".status"'
 ```
 
 ---
@@ -614,6 +821,9 @@ Para mantener la estabilidad de la red y el sistema, los campos se clasifican en
 * **`cors` (global)**: Cambios en la política CORS global se aplican inmediatamente a todas las rutas que no tengan override.
 * **`corsOverrides`**: Añadir, modificar o remover overrides CORS por path exacto.
 * **`overrides` (excepciones de endpoints)**: Permite añadir, modificar o remover overrides específicos de rate limit sobre paths exactos.
+* **`jwt` (global)**: Cambios en la sección JWT global (lista de issuers, TTLs) se reflejan inmediatamente. El `JwtAuthRegistry` se reconstruye: los issuers nuevos arrancan background refresh, los removidos se detienen. **Las caches de issuers no modificados se recrean vacías** (es un trade-off del swap atómico — un request con un kid previamente cacheado puede disparar un refresh on miss durante el primer segundo post-reload).
+* **`jwtOverrides`**: Añadir, modificar o remover overrides JWT por path exacto.
+* **`routes[].jwt`**: Cambios en el modo (shared-secret ↔ jwks) o en la referencia al issuer se aplican al siguiente request.
 * **`logging.level`**: Modifica en caliente el nivel del logger dinámicamente en Pino (`logger.level = nuevoLevel`) sin reiniciar.
 
 #### ⚠️ Campos Estáticos (Ignorados de forma segura con un `warn`)

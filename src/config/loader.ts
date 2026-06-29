@@ -92,6 +92,51 @@ export function loadConfig(configPathOverride?: string): Readonly<GatewayConfig>
     }
   }
 
+  // 5.1. Validar referencias cruzadas de JWT (issuers desconocidos fallan al arranque)
+  validateJwtReferences(config);
+
   // 6. Devolver la configuración congelada de forma inmutable
   return deepFreeze(config);
+}
+
+/**
+ * Valida que cada ruta que use modo JWKS (`jwt.issuer`) referencie un issuer
+ * declarado en `jwt.issuers[]` o sea exactamente "any".
+ * Falla rápido con ConfigValidationError para detectar typos antes del arranque.
+ */
+function validateJwtReferences(config: GatewayConfig): void {
+  const globalIssuers = new Set((config.jwt?.issuers ?? []).map((i) => i.name));
+  const errors: string[] = [];
+
+  const checkJwt = (jwt: { mode?: 'shared-secret' | 'jwks'; issuer?: string } | undefined, ref: string): void => {
+    if (!jwt) {return;}
+    // shared-secret: no necesita issuer global
+    if (jwt.mode !== 'jwks') {return;}
+    const refIssuer = jwt.issuer;
+    if (!refIssuer) {
+      errors.push(`${ref}: jwt.mode="jwks" requiere definir jwt.issuer`);
+      return;
+    }
+    if (refIssuer === 'any') {
+      if (!config.jwt || globalIssuers.size === 0) {
+        errors.push(`${ref}: jwt.issuer="any" requiere que jwt.issuers[] tenga al menos un issuer`);
+      }
+      return;
+    }
+    if (!globalIssuers.has(refIssuer)) {
+      errors.push(`${ref}: jwt.issuer="${refIssuer}" no existe en jwt.issuers[] (disponibles: ${[...globalIssuers].join(', ') || 'ninguno'})`);
+    }
+  };
+
+  for (const [i, route] of config.routes.entries()) {
+    checkJwt(route.jwt, `routes[${i}] (prefix="${route.prefix}").jwt`);
+  }
+
+  for (const [i, override] of (config.jwtOverrides ?? []).entries()) {
+    checkJwt(override.jwt, `jwtOverrides[${i}] (path="${override.path}").jwt`);
+  }
+
+  if (errors.length > 0) {
+    throw new ConfigValidationError(errors);
+  }
 }

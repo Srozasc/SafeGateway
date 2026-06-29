@@ -2,6 +2,7 @@ import type { RouteRegistry } from '../routing/registry.js';
 import type { RouteMatch } from '../routing/types.js';
 import type { JWTPayload } from 'jose';
 import type { CorsDecision } from '../middleware/cors/types.js';
+import type { JwtAuthRegistry } from '../middleware/jwt-auth/registry.js';
 
 export interface ServerConfig {
   port: number;
@@ -28,12 +29,54 @@ export interface RouteTimeoutConfig {
   body?: number;
 }
 
-export interface JwtAuthConfig {
+// ----- JWT Auth -----
+
+/** Modo shared-secret (HS256/HS384/HS512 con secreto local). No requiere sección global `jwt`. */
+export interface JwtSharedSecretConfig {
   enabled: boolean;
   secret: string;
   algorithm: 'HS256' | 'HS384' | 'HS512';
   forwardClaims: string[];
+  issuer?: string;
+  audience?: string;
 }
+
+/** Modo JWKS — valida contra un endpoint remoto declarado en `jwt.issuers[]`. */
+export interface JwtJwksConfig {
+  enabled: boolean;
+  mode: 'jwks';
+  /** Nombre del issuer (declarado en jwt.issuers[].name) o "any" para aceptar cualquier issuer. */
+  issuer: string;
+  forwardClaims: string[];
+}
+
+/** Discriminated union resuelto por Zod desde JwtAuthConfigSchema. */
+export type JwtAuthConfig = JwtSharedSecretConfig | JwtJwksConfig;
+
+export interface JwtIssuerConfig {
+  name: string;
+  jwksUri: string;
+  issuer: string;
+  audience?: string;
+  cacheTtlSeconds: number;
+  staleGracePeriodSeconds: number;
+  refreshCooldownSeconds: number;
+  refreshOnMiss: boolean;
+  timeoutMs: number;
+}
+
+export interface JwtGlobalConfig {
+  enabled: boolean;
+  mode: 'shared-secret' | 'jwks';
+  issuers: JwtIssuerConfig[];
+}
+
+export interface JwtOverrideConfig {
+  path: string;
+  jwt: JwtAuthConfig;
+}
+
+// ----- Métricas -----
 
 export interface MetricsConfig {
   enabled: boolean;
@@ -86,6 +129,13 @@ export interface OverrideConfig {
   rateLimit: RateLimitConfig;
 }
 
+export interface HealthConfig {
+  enabled: boolean;
+  path: string;
+  backendPath: string;
+  timeoutMs: number;
+}
+
 export interface GatewayConfig {
   server: ServerConfig;
   redis: RedisConfig;
@@ -95,6 +145,9 @@ export interface GatewayConfig {
   overrides?: OverrideConfig[];
   cors?: CorsConfig;
   corsOverrides?: CorsOverrideConfig[];
+  jwt?: JwtGlobalConfig;
+  jwtOverrides?: JwtOverrideConfig[];
+  health?: HealthConfig;
 }
 
 export interface GatewayContext {
@@ -106,6 +159,7 @@ export interface GatewayContext {
 export interface ConfigSnapshot {
   config: Readonly<GatewayConfig>;
   registry: RouteRegistry;
+  jwtRegistry: JwtAuthRegistry;
   createdAt: string;
 }
 
@@ -115,3 +169,4 @@ export interface ReloadResult {
   ignored: string[];
   error?: string;
 }
+

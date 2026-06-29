@@ -19,11 +19,18 @@ interface RequestWithMetrics extends FastifyRequest {
 export class MetricsPlugin implements GatewayPlugin {
   public readonly name = 'metrics';
   private readonly metricsPath: string;
+  private readonly excludedPaths: Set<string>;
   private readonly metrics: GatewayMetrics;
 
-  constructor(config: GatewayConfig, logger: Logger) {
+  constructor(config: GatewayConfig, logger: Logger, additionalExcludedPaths: string[] = []) {
     this.metricsPath = config.metrics.path || '/metrics';
-    logger.info({ path: this.metricsPath }, 'Inicializando plugin de métricas Prometheus...');
+    // Construir el conjunto de paths excluidos: el endpoint de métricas +
+    // cualquier path adicional (típicamente el endpoint de health aggregation)
+    this.excludedPaths = new Set<string>([this.metricsPath, ...additionalExcludedPaths]);
+    logger.info(
+      { path: this.metricsPath, excludedPaths: Array.from(this.excludedPaths) },
+      'Inicializando plugin de métricas Prometheus...',
+    );
 
     // Configurar labels por defecto globales en el registro
     if (config.metrics.defaultLabels && Object.keys(config.metrics.defaultLabels).length > 0) {
@@ -61,9 +68,17 @@ export class MetricsPlugin implements GatewayPlugin {
 
   // Métodos de los Hooks Globales de Fastify
 
+  /**
+   * Determina si un request debe ser excluido de la instrumentación.
+   * Excluye: /metrics, /health (u otros paths configurados).
+   */
+  private shouldSkip(request: FastifyRequest): boolean {
+    const pathname = request.url.split('?')[0] || '/';
+    return this.excludedPaths.has(pathname);
+  }
+
   public onRequestHook = async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
-    const pathname = request.url.split('?')[0];
-    if (pathname === this.metricsPath) {
+    if (this.shouldSkip(request)) {
       return;
     }
 
@@ -89,8 +104,7 @@ export class MetricsPlugin implements GatewayPlugin {
   };
 
   public onResponseHook = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const pathname = request.url.split('?')[0];
-    if (pathname === this.metricsPath) {
+    if (this.shouldSkip(request)) {
       return;
     }
     this.finalize(request, reply.statusCode.toString());
@@ -101,8 +115,7 @@ export class MetricsPlugin implements GatewayPlugin {
     reply: FastifyReply,
     error: FastifyError,
   ): Promise<void> => {
-    const pathname = request.url.split('?')[0];
-    if (pathname === this.metricsPath) {
+    if (this.shouldSkip(request)) {
       return;
     }
     // Usar código del error o el del reply, fallback a "500"
@@ -111,8 +124,7 @@ export class MetricsPlugin implements GatewayPlugin {
   };
 
   public onAbortHook = async (request: FastifyRequest): Promise<void> => {
-    const pathname = request.url.split('?')[0];
-    if (pathname === this.metricsPath) {
+    if (this.shouldSkip(request)) {
       return;
     }
     this.finalize(request, '499');

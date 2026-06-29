@@ -27,7 +27,7 @@ describe('ConfigReloader Unit Tests', () => {
     ],
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
     process.env = { ...originalEnv };
 
@@ -38,10 +38,13 @@ describe('ConfigReloader Unit Tests', () => {
 
     logger = pino({ level: 'silent' });
     const registry = new RouteRegistry(baseConfig);
+    const { JwtAuthRegistry } = await import('../../../src/middleware/jwt-auth/registry.js');
+    const jwtRegistry = new JwtAuthRegistry(baseConfig.jwt, logger);
     snapshotRef = {
       current: {
         config: baseConfig,
         registry,
+        jwtRegistry,
         createdAt: new Date().toISOString(),
       },
     };

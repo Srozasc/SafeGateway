@@ -17,6 +17,17 @@ logging:
   # Niveles de log: debug | info | warn | error
   level: "info"
 
+# ── Endpoint agregado de Health Aggregation ─────────────────────────────
+# Consulta en paralelo el backendPath de cada servicio declarado en routes[]
+# y devuelve un JSON con el estado por servicio y un estado global agregado.
+# Útil para load balancers, Kubernetes readiness probes y herramientas de monitoreo.
+# No requiere autenticación ni rate limiting. Se excluye de /metrics.
+health:
+  enabled: true           # Habilita el endpoint /health (default: true)
+  path: "/health"         # Path del endpoint en el Gateway (default: /health)
+  backendPath: "/health"  # Path del health en cada servicio downstream (default: /health)
+  timeoutMs: 2000         # Timeout por servicio en ms (default: 2000)
+
 # Rutas estándar del Gateway (Reverse Proxy con prefijos y patrones)
 routes:
   # Rutas de API general
@@ -47,3 +58,63 @@ overrides:
     rateLimit:
       maxRequests: 5
       windowSeconds: 60
+
+# ===============================================================
+# JWT — Autenticación (HS256/HS384/HS512 + JWKS RS256)
+# ===============================================================
+# El plugin JWT soporta dos modos que pueden coexistir en distintas rutas:
+#
+# 1. shared-secret (compat): cada ruta define su propio `secret` y `algorithm`.
+#    No requiere la sección global `jwt`. Idóneo para compatibilidad hacia atrás.
+#
+# 2. jwks: las rutas referencian por nombre a un issuer declarado en `jwt.issuers[]`.
+#    El gateway descubre claves públicas vía JWKS endpoint (RFC 7517), las cachea
+#    y rota automáticamente. Soporta múltiples issuers (multi-tenant / multi-env).
+#
+# Una ruta sin bloque `jwt` (o con `jwt.enabled=false`) es PÚBLICA (bypass).
+#
+# Para más detalles: specs/safegateway-jwt-jwks-validation.md
+
+# Sección global `jwt` — solo requerida para modo JWKS
+# jwt:
+#   enabled: true
+#   mode: jwks                        # "shared-secret" | "jwks" (default: "shared-secret")
+#   issuers:
+#     - name: auth-service-prod
+#       jwksUri: https://auth.flashdrop.cl/.well-known/jwks.json
+#       issuer: "https://auth.flashdrop.cl"
+#       audience: "flashdrop-api"             # opcional, claim `aud` esperado
+#       cacheTtlSeconds: 3600                 # default: 3600 (1h)
+#       staleGracePeriodSeconds: 1800         # ventana de gracia tras TTL (default: 1800)
+#       refreshCooldownSeconds: 30            # cooldown entre refreshes sync (default: 30)
+#       refreshOnMiss: true                   # refresh sync si kid desconocido (default: true)
+#       timeoutMs: 3000                       # timeout HTTP al JWKS endpoint (default: 3000)
+
+# jwtOverrides (path-exact, mirror de corsOverrides):
+# jwtOverrides:
+#   - path: "/api/public"
+#     jwt:
+#       enabled: false   # Hace esta ruta pública, ignorando el resto de config
+#
+# Ejemplos de rutas protegidas:
+#   - prefix: "/api/orders"
+#     target: "http://orders:8084"
+#     jwt:
+#       issuer: auth-service-prod     # Referencia por nombre al issuer global
+#
+#   - prefix: "/api/public"
+#     target: "http://public:8086"
+#     jwt:
+#       issuer: any                   # Acepta cualquier issuer registrado (mapeo por iss claim)
+#
+#   - prefix: "/api/protected"        # Compatibilidad HS256 sin sección global
+#     target: "http://backend:3000"
+#     jwt:
+#       enabled: true
+#       secret: "${JWT_SECRET}"
+#       algorithm: HS256              # default
+#
+#   - prefix: "/api/auth/login"       # Ruta explícitamente pública
+#     target: "http://auth:8082"
+#     jwt:
+#       enabled: false
