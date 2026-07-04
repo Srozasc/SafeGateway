@@ -45,5 +45,8 @@
       "C:\\Users\\ASUSTU~1\\AppData\\Local\\Temp"
     ]
   },
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": [
+    "obsidian"
+  ]
 }

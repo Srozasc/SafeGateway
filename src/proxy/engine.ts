@@ -75,7 +75,7 @@ export class ProxyEngine {
     // Build proxy headers
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(request.headers as Record<string, string | string[] | undefined>)) {
-      if (value === undefined) {continue;}
+      if (value === undefined || key.toLowerCase() === 'host') {continue;}
       headers[key] = Array.isArray(value) ? value.join(', ') : value;
     }
 

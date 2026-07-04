@@ -22,6 +22,22 @@ health:
   backendPath: /health
   timeoutMs: 2000
 
+# Configuración global de CORS para interceptar preflight (OPTIONS)
+cors:
+  enabled: true
+  origins:
+    - "http://localhost:8080"
+  methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowedHeaders:
+    - Content-Type
+    - Authorization
+  maxAge: 86400
+
 routes:
   # ===============================================================
   # Ruta Pública (Redirige al Backend Mock)
@@ -50,13 +66,23 @@ routes:
   # ===============================================================
   # Ruta mapeada a la PokéAPI Real
   # ===============================================================
-  - prefix: /api
-    target: https://pokeapi.co/api/v2
-    stripPrefix: true
+  - prefix: /api/v2
+    target: https://pokeapi.co
+    stripPrefix: false
     metricsLabel: "pokeapi"
     backendName: "pokeapi-ext"
     rateLimit:
       maxRequests: 8
+      windowSeconds: 60
+
+  # ===============================================================
+  # Ruta de administración (Redirige al Backend Mock)
+  # ===============================================================
+  - prefix: /admin
+    target: http://mock-service:8080
+    stripPrefix: true
+    rateLimit:
+      maxRequests: 100
       windowSeconds: 60
 
   # ===============================================================

@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Reglas del Proyecto
+
+- **Gestor de paquetes**: queda estrictamente prohibido usar `npm` o `npx`. Utilizar exclusivamente **pnpm** para gestionar dependencias y **`pnpx`** para ejecutar binarios.
+- **Idioma**: todas las comunicaciones con el usuario, explicaciones, comentarios de código, mensajes de commit y nombres visibles al usuario deben estar en **español**. El código de programación y los identificadores técnicos permanecen en inglés.
+
 ## Project Overview
 
 API Gateway HTTP Modular - A TypeScript/Fastify-based reverse proxy with middleware pipeline architecture. Built on **Undici** (Node's native HTTP client) for the proxy engine. Features: Redis-backed rate limiting, JWT authentication, Prometheus metrics, circuit breakers with retries, CORS handling with preflight, and zero-downtime config hot-reload via SIGHUP.
@@ -76,7 +81,7 @@ Graceful shutdown on `SIGTERM`/`SIGINT`: close Fastify → close Undici pools �
 
 ### Core Modules
 - **`src/server.ts`** — Fastify factory. Registers the global `onRequest` hook that attaches `routeMatch` to `request.gatewayContext`, mounts the `/metrics` endpoint (when enabled), then registers each route as `${prefix}*` with `preHandler: pipeline.getPreHandler()` and the proxy as handler.
-- **`src/routing/registry.ts`** — `RouteRegistry.match(url)` resolves routes via: **exact override path > longest prefix match**. Returned `RouteMatch` carries target, stripPrefix, rateLimit, timeout, circuitBreaker, effectiveCors, and metric label overrides.
+- **`src/routing/registry.ts`** — `RouteRegistry.match(url)` resolves routes via: **exact override path > longest prefix match**. Returned `RouteMatch` carries target, stripPrefix, rateLimit, timeout, circuitBreaker, effectiveCors, effectiveJwt, and metric label overrides (the `effective*` fields are computed by merging through the 3-level precedence chain so plugins never have to re-merge).
 - **`src/middleware/pipeline.ts`** — `MiddlewarePipeline` runs plugin `onRequest` hooks sequentially. **Short-circuit**: if a hook calls `reply.send()`, remaining hooks and the proxy are skipped. Also exposes `getPreHandler()` and `getLifecycleHooks()` for proxy integration.
 - **`src/proxy/`** — Undici-based proxy engine:
   - `engine.ts` — `ProxyEngine.forward()` performs the upstream request, streams the body bidirectionally, applies `X-Forwarded-*` headers.
@@ -105,7 +110,7 @@ Graceful shutdown on `SIGTERM`/`SIGINT`: close Fastify → close Undici pools �
 - **Response header injection via lifecycle hooks**: Plugins that need to add headers to backend responses use `getLifecycleHooks().onBeforeResponse` (called BEFORE `reply.send()`), not `onResponse` (called AFTER).
 - **Redis Rate Limiting**: Fixed window counter using atomic ioredis pipelines; `fail-open` (let through) or `fail-closed` (503) on Redis errors.
 - **Circuit Breaker states**: `CLOSED` → `OPEN` (on threshold or 5 consecutive failures) → `HALF_OPEN` (after `recoveryTimeMs`) → `CLOSED` (after `halfOpenRequests` consecutive successes) or back to `OPEN` on any failure.
-- **Retry safety**: Only retries idempotent methods (GET/HEAD/OPTIONS/PUT/DELETE) and only on `ECONNREFUSED`/`ETIMEDOUT`/`ECONNRESET`/`ENOTFOUND`/`EPIPE` or HTTP 5xx. Never retries while circuit is `OPEN`.
+- **Retry safety**: Solo reintenta métodos idempotentes por defecto (`GET`/`HEAD`/`OPTIONS`/`PUT`/`DELETE`). La lista es **configurable por ruta** vía `routes[].retryableMethods` (e.g. añadir `POST` solo si el backend implementa idempotency-key). Solo reintenta en errores elegibles (`ECONNREFUSED`/`ETIMEDOUT`/`ECONNRESET`/`ENOTFOUND`/`EPIPE` o HTTP 5xx). Nunca reintenta con el circuit en estado `OPEN`.
 
 ### Directory Structure
 ```
@@ -141,8 +146,8 @@ Primary config: `config/gateway.yaml` (path overridable via `CONFIG_PATH` env va
 - `logging`: `{ level }` — hot-reloadable
 - `metrics`: `{ enabled, path?, defaultLabels? }` — Prometheus endpoint config
 - `cors`: `{ enabled, origins, methods, allowedHeaders, exposedHeaders, credentials, maxAge }` — CORS global policy (hot-reloadable, see CORS section below)
-- `routes[]`: `{ prefix, target, stripPrefix, rateLimit?, timeout?, circuitBreaker?, cors?, jwt?, metricsLabel?, backendName? }`
-  - `timeout`: `{ connect, response }` in ms (backend-specific, restart required)
+- `routes[]`: `{ prefix, target, stripPrefix, rateLimit?, timeout?, circuitBreaker?, cors?, jwt?, retryableMethods?, metricsLabel?, backendName? }`
+  - `timeout`: `{ connect, headers, body }` en ms (backend-specific, requiere reinicio)
   - `circuitBreaker`: `{ enabled, errorThreshold, requestCount, recoveryTimeMs, halfOpenRequests, maxRetries, retryDelayMs, retryMaxDelayMs }`
   - `cors`: partial CORS override for this route (only specified fields override the global config)
   - `jwt`: per-route JWT config. **Two modes** (auto-detected by Zod):
@@ -306,10 +311,14 @@ Example PromQL queries:
 
 ## Observability
 
-- **Logs**: Pino with JSON output; `Authorization` and `Cookie` headers are redacted via serializer.
+- **Logs**: Pino con salida JSON. El serializador redacta automáticamente las siguientes cabeceras sensibles (sustituyéndolas por el literal `[REDACTED]` antes de escribirlas en `stdout`):
+  - `authorization`
+  - `cookie`
+  - `proxy-authorization`
+  - `set-cookie` (cabecera de respuesta)
 - **Metrics**: Prometheus endpoint at `/metrics` (path configurable). Includes Node.js defaults plus custom `gateway_http_*`, `gateway_rate_limit_*`, `gateway_circuit_breaker_*`, `gateway_retries_*`, `gateway_cors_*`, `gateway_jwt_*` metrics. Labels are constrained to low-cardinality values (`metricsLabel`/`backendName` fallbacks).
 - **In-flight safety**: `gateway_http_requests_in_flight` uses a private `Symbol` flag + `socket.once('close')` listener to prevent double-decrement on client aborts (mitigates connection-leak false positives).
-- **Error handler**: 5xx errors return a sanitized JSON envelope; stack traces and internal IPs are never exposed to clients.
+- **Error handler & centralized envelope**: todos los plugins (CORS, rate-limit, JWT, circuit-breaker, health) y el handler global usan `buildErrorResponse()` (`src/errors/responses.ts`) para producir un sobre JSON uniforme con la forma `{ statusCode, error, message, requestId?, timestamp, stack? }`. El campo `stack` **solo se incluye fuera de producción** (`NODE_ENV !== 'production'`); en producción se omite por completo. Direcciones IP internas y nombres de backends jamás se exponen al cliente.
 - **Dev tooling** (via `docker-compose.example.yml`): Dozzle (localhost:9999) for live log viewing, Prometheus (localhost:9090), Grafana (localhost:3001) with pre-provisioned "Gateway Overview" dashboard.
 
 ### CORS Metrics

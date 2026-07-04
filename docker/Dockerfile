@@ -3,6 +3,8 @@
 # ==========================================
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache ca-certificates
+
 # Instalar y activar pnpm v9 vía corepack (compatible con Node.js 20)
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
@@ -24,6 +26,8 @@ RUN pnpm build
 # Stage 2: Runtime de producción ligero
 # ==========================================
 FROM node:20-alpine AS runtime
+
+RUN apk add --no-cache ca-certificates
 
 # Habilitar corepack en la imagen final con la misma versión fijada
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate

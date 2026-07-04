@@ -19,6 +19,7 @@ services:
       - CONFIG_PATH=/app/config/gateway.yaml
       - REDIS_URL=redis://redis-cache:6379
       - LOG_LEVEL=info
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       # Montar el directorio de configuración en modo de solo lectura (ro) para evitar fallos de inodo en Windows
       - .:/app/config:ro

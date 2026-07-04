@@ -13,7 +13,7 @@ Un API Gateway robusto, modular, configurable e inmutable desarrollado en **Type
 * **Priorización de Enrutamiento en Cascada**: Resolución inteligente de coincidencia de rutas (Rutas específicas/Overrides > Prefijo más largo > Prefijo general).
 * **Configuración Declarativa Inmutable**: Lector de archivos YAML/JSON con validación estricta de esquemas mediante **Zod** y soporte para interpolación segura de variables de entorno (`${ENV_VAR}`).
 * **Registro de Logs Estructurados**: Integración nativa de **Pino** con serializadores de peticiones, respuestas y errores redactando automáticamente información sensible (tokens `Authorization`, cookies, etc.).
-* **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onBeforeResponse`, `onAfterResponse` y `onError` de ejecución secuencial y capacidad de cortocircuito (*short-circuit*).
+* **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onBeforeResponse` y `onError` (en `ProxyLifecycleHooks`) más los hooks de alto nivel `onRequest` y `onResponse` por plugin (`GatewayPlugin`). Ejecución secuencial con capacidad de cortocircuito (*short-circuit*).
 * **Endpoint de Health Aggregation**: `GET /health` que consulta en paralelo el endpoint de salud de cada servicio downstream declarado en `routes[]` y devuelve un estado agregado (`ok` / `degraded` / `down`) con código HTTP apropiado. Ideal para load balancers, Kubernetes readiness probes y herramientas de monitoreo. No requiere autenticación, no consume rate-limit y se excluye de las métricas HTTP para no contaminar la observabilidad del tráfico real.
 * **Despliegue Contenerizado**: Optimizado mediante una compilación Docker *multi-stage* ultra-ligera (basada en `node:20-alpine`) e instrumentado con chequeos de salud (`HEALTHCHECK`) nativos de red.
 
@@ -305,6 +305,7 @@ jwtOverrides:                    # Path-exact overrides (mayor prioridad que rou
 - `routes[].jwt.issuer: "any"` requiere al menos un issuer configurado
 
 **State machine del cache JWKS** (por issuer):
+- `empty` → nunca se hizo un fetch exitoso (estado inicial tras arranque o tras un rebuild del registry por SIGHUP)
 - `fresh` → dentro del TTL, sirve directo (latencia <5ms p99)
 - `stale` → pasó TTL pero dentro de `staleGracePeriodSeconds`, sirve + background refresh
 - `expired` → pasó ambos, refresh on miss síncrono (gated por `refreshCooldownSeconds`)
@@ -386,9 +387,21 @@ El [`RetryInterceptor`](file:///d:/desarrollo/Gateway/src/middleware/circuit-bre
 | 3 (4to retry) | 0 – 800 ms |
 
 **Restricciones de seguridad:**
-- Solo se reintenta en **métodos idempotentes**: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`.
+- Por defecto solo se reintenta en **métodos idempotentes**: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`. La lista es **configurable por ruta** vía `routes[].retryableMethods` (si necesitas incluir `POST` o `PATCH`, decláralo explícitamente).
 - Solo se reintenta en errores elegibles: `ECONNREFUSED`, `ETIMEDOUT`, `ECONNRESET`, `ENOTFOUND`, `EPIPE` y códigos HTTP `500`, `502`, `503`, `504`.
 - **No se reintenta** cuando el circuit está en estado `OPEN`.
+
+```yaml
+# Ejemplo: habilitar retry también para POST en una ruta específica
+routes:
+  - prefix: /api/webhook
+    target: http://webhooks-svc:8080
+    circuitBreaker:
+      enabled: true
+      maxRetries: 3
+    retryableMethods:
+      - POST  # ⚠️ Solo si tu backend acepta POSTs reintentables (idempotency-key, etc.)
+```
 
 ### Respuesta cuando el Circuit está OPEN
 
@@ -542,18 +555,28 @@ export interface GatewayPlugin {
 
 ### Hooks de Ciclo de Vida del Proxy
 
-Además del pipeline estándar, el `ProxyEngine` expone hooks de bajo nivel para integración con patrones de resiliencia:
+Además del pipeline estándar, el `ProxyEngine` expone hooks de bajo nivel para integración con patrones de resiliencia. Sus definiciones viven en [`src/proxy/types.ts`](src/proxy/types.ts):
 
 ```typescript
 export interface ProxyLifecycleHooks {
-  // Ejecutado justo antes de enviar la request al backend
-  onBeforeRequest?(request: FastifyRequest, reply: FastifyReply): Promise<void>;
-  // Ejecutado cuando el backend retorna una respuesta (incluso errores 5xx)
-  onAfterResponse?(statusCode: number, request: FastifyRequest): void;
+  // Ejecutado justo antes de enviar la request al backend (puede mutar opciones o rechazar)
+  onBeforeRequest?(
+    options: ProxyRequestOptions,
+    context: ProxyContext
+  ): void | Promise<void>;
+
+  // Ejecutado tras recibir las cabeceras del backend (puede inspeccionar/mutar headers)
+  onBeforeResponse?(
+    response: ProxyResponseData,
+    context: ProxyContext
+  ): void | Promise<void>;
+
   // Ejecutado cuando ocurre un error de red o timeout
-  onError?(error: Error, request: FastifyRequest): void;
+  onError?(error: ProxyError, context: ProxyContext): void | Promise<void>;
 }
 ```
+
+> **Importante**: `onBeforeResponse` se ejecuta **antes** de `reply.send()`, por lo que es el hook correcto para plugins que necesitan añadir cabeceras a la respuesta del backend (ver patrón del `CorsPlugin`). El hook `onResponse` de `GatewayPlugin`, en cambio, se ejecuta **después** de `reply.send()` y no puede agregar nuevas cabeceras.
 
 ### Ejemplo Práctico: Plugin de Telemetría
 
@@ -583,12 +606,17 @@ export class TelemetryPlugin implements GatewayPlugin {
 
 ```typescript
 // Dentro de bootstrap() en src/index.ts:
-const pipeline = new MiddlewarePipeline([
+const pluginsList: GatewayPlugin[] = [
+  corsPlugin,           // PRIMERO: responde preflights OPTIONS sin consumir rate-limit/auth/circuit-breaker
   rateLimitPlugin,
+  jwtAuthPlugin,
   circuitBreakerPlugin, // Registra hooks de ciclo de vida en ProxyEngine
-  new TelemetryPlugin(logger),
-]);
+  // metricsPlugin (opcional, ver config.metrics.enabled)
+];
+const pipeline = new MiddlewarePipeline(pluginsList);
 ```
+
+**Orden importa**: el bootstrap oficial ejecuta los plugins en este orden — request: CORS → rate-limit → JWT → circuit-breaker → metrics; response: orden inverso. Los preflights CORS se cortocircuitan al inicio y nunca pasan por el resto del pipeline.
 
 *Nota: Si un plugin responde la petición directamente llamando a `reply.send()` en su gancho `onRequest`, los siguientes middlewares y el proxy se **cancelarán automáticamente** (Short-circuit).*
 
@@ -627,8 +655,23 @@ pnpm start
 # Ejecutar todas las suites de prueba (unitarias e integradas)
 pnpm test
 
+# Ejecutar solo las pruebas unitarias (tests/unit/**)
+pnpm test:unit
+
+# Ejecutar solo las pruebas de integración (tests/integration/**)
+pnpm test:integration
+
+# Modo watch (re-ejecuta al detectar cambios)
+pnpm test:watch
+
 # Ejecutar pruebas y generar reporte de cobertura
 pnpm test:coverage
+
+# Ejecutar un único archivo de prueba
+pnpm vitest run tests/unit/routing/matcher.test.ts
+
+# Filtrar pruebas por nombre (subconjunto del archivo activo)
+pnpm vitest run -t "matches longest prefix"
 ```
 
 ### Docker
@@ -838,7 +881,11 @@ Cualquier cambio en las siguientes secciones estructurales no bloqueará la reca
 ## 🔒 Seguridad e Integridad de Datos
 
 * **Ocultación de Errores Internos**: El manejador de errores global intercepta cualquier error crítico en producción (estados `5xx`) y retorna una estructura JSON limpia sin exponer trazas de pila (*stack traces*), dependencias caídas, IPs o puertos de backends internos.
-* **Logs Limpios**: Las cabeceras `Authorization` y `Cookie` de las peticiones son automáticamente reemplazadas por el string `[REDACTED]` por el logger Pino antes de ser escritas en stdout para asegurar que ninguna credencial se guarde en disco.
+* **Logs Limpios**: El logger Pino redacta automáticamente las siguientes cabeceras sensibles, reemplazándolas por el literal `[REDACTED]` antes de escribirlas en `stdout` para asegurar que ninguna credencial termine persistida en disco:
+  * `Authorization`
+  * `Cookie`
+  * `Proxy-Authorization`
+  * `Set-Cookie` (cabecera de respuesta)
 
 ---
 

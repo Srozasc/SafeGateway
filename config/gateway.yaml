@@ -1,0 +1,58 @@
+# Gateway HTTP Modular — configuración local de desarrollo
+#
+# Variable de entorno requerida:
+#   REDIS_URL  — URL de Redis. Ejemplos:
+#                redis://localhost:6379            (Redis nativo)
+#                redis://:password@host:6379/0     (con auth)
+#
+# Notas:
+#   - Reinicio requerido tras editar este archivo (no es hot-reload).
+#   - CORS / JWT / métricas adicionales: ver config/gateway.example.yaml.
+
+server:
+  port: 3000
+  host: "0.0.0.0"
+
+redis:
+  url: "${REDIS_URL}"
+  onFailure: "open"
+
+logging:
+  level: "info"
+
+# Endpoint agregado de health — consulta cada <target>/<backendPath> en paralelo.
+# Devuelve 200 si el estado global es ok/degraded, 503 si es down.
+health:
+  enabled: true
+  path: "/health"
+  backendPath: "/health"
+  timeoutMs: 2000
+
+routes:
+  # API general — proxy a un backend en localhost:8080.
+  # Ajustá el `target` si tu backend corre en otro puerto/host.
+  - prefix: "/api"
+    target: "http://localhost:8080"
+    stripPrefix: false
+    rateLimit:
+      maxRequests: 1000
+      windowSeconds: 60
+    timeout:
+      connect: 5000
+      body: 30000
+
+  # Rutas de administración — proxy a localhost:9090 con strip del prefijo.
+  # /admin/users → http://localhost:9090/users
+  - prefix: "/admin"
+    target: "http://localhost:9090"
+    stripPrefix: true
+    rateLimit:
+      maxRequests: 100
+      windowSeconds: 60
+
+# Overrides por path exacto — mayor precedencia que las políticas de routes[].
+overrides:
+  - path: "/api/login"
+    rateLimit:
+      maxRequests: 5
+      windowSeconds: 60
