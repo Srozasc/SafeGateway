@@ -7,6 +7,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Gestor de paquetes**: queda estrictamente prohibido usar `npm` o `npx`. Utilizar exclusivamente **pnpm** para gestionar dependencias y **`pnpx`** para ejecutar binarios.
 - **Idioma**: todas las comunicaciones con el usuario, explicaciones, comentarios de código, mensajes de commit y nombres visibles al usuario deben estar en **español**. El código de programación y los identificadores técnicos permanecen en inglés.
 
+## Runtime & Tooling
+
+### Versiones fijadas (Docker)
+- **Node.js v20 LTS** — base image `node:20-alpine` en `docker/Dockerfile`.
+- **pnpm v9.15.9** — fijada con `corepack prepare` en el Dockerfile.
+- **Redis v7** — `redis:7-alpine` en `docker-compose.example.yml`. Requerido por `src/middleware/rate-limit/`.
+
+### Path canónico: Docker Compose
+Este proyecto está pensado para correr con Docker. El path nativo (`pnpm dev`) es solo para iterar código FUERA del container y requiere un Redis accesible desde el host.
+
+- **Canónico**: `docker compose -f docker/docker-compose.example.yml up -d --build` levanta gateway + Redis + mock-service + Dozzle + Prometheus + Grafana.
+- **Nativo**: `pnpm dev` exige exportar `REDIS_URL` apuntando a un Redis accesible (ej. `redis://localhost:6379`).
+
+> **Gotcha de archivos de config**: el compose monta `./docker` en `/app/config:ro` dentro del container, así que el YAML efectivo es **`docker/gateway.yaml`** — NO `config/gateway.yaml`. Los dos archivos son independientes y se mantienen por separado. El config nativo vive en `config/`.
+
+### Observabilidad (compose levantado)
+| Servicio | URL local | Notas |
+|----------|-----------|-------|
+| Gateway + `/health` + `/metrics` | `http://localhost:3000` | Reverse proxy principal |
+| Dozzle (logs en vivo) | `http://localhost:9999` | Live tail, búsqueda full-text |
+| Prometheus | `http://localhost:9090` | Scrape target: `gateway:3000/metrics` |
+| Grafana | `http://localhost:3001` | `admin`/`admin`, anonymous Viewer habilitado |
+
 ## Project Overview
 
 API Gateway HTTP Modular - A TypeScript/Fastify-based reverse proxy with middleware pipeline architecture. Built on **Undici** (Node's native HTTP client) for the proxy engine. Features: Redis-backed rate limiting, JWT authentication, Prometheus metrics, circuit breakers with retries, CORS handling with preflight, and zero-downtime config hot-reload via SIGHUP.
@@ -54,6 +77,9 @@ pnpm vitest run -t "matches longest prefix"
 
 # Build Docker image
 pnpm docker:build
+
+# Validate MCP server setup (verifica `.mcp.json` y plugins referenciados)
+pnpm validate:mcp
 
 # Start full dev stack (Redis, mock backend, Dozzle, Prometheus, Grafana)
 docker compose -f docker/docker-compose.example.yml up --build
@@ -163,124 +189,41 @@ Primary config: `config/gateway.yaml` (path overridable via `CONFIG_PATH` env va
 
 ### CORS Configuration
 
-CORS handling is configurable via 3-level precedence:
+CORS tiene **3 niveles de precedencia** (mayor a menor):
 
-1. **`corsOverrides[path=X]`** (highest priority) — path-exact CORS override
-2. **`routes[].cors`** (route prefix) — partial override of global config
-3. **`cors`** (global default) — applied to all routes
+1. **`corsOverrides[path=X]`** — path-exact override
+2. **`routes[].cors`** — partial override por prefijo de ruta
+3. **`cors`** (global) — default aplicado a todas las rutas
 
-All CORS fields are optional. When a partial config is specified, missing fields inherit from the parent (global → defaults).
+Todos los campos son opcionales en los overrides; un campo no especificado hereda del padre (global → defaults). Las **reglas fail-fast** (en `validateMergedCorsConfig`) incluyen: `enabled=true` requiere ≥1 origin; `credentials=true` no se puede combinar con `origins=["*"]` ni `allowedHeaders=["*"]`.
 
-```yaml
-cors:
-  enabled: true
-  origins: ["https://app.flashdrop.cl"]
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
-  allowedHeaders: ["Content-Type", "Authorization"]
-  exposedHeaders: []
-  credentials: false
-  maxAge: 86400
+Preflight (OPTIONS + Origin) hace **short-circuit** y devuelve HTTP 204 sin tocar backend (no consume rate-limit/auth/circuit-breaker). Origin matching case-insensitive sobre `scheme + host + port`. Wildcard `*` acepta cualquier origin pero desactiva `credentials`.
 
-routes:
-  - prefix: /api
-    target: http://backend:3000
-  - prefix: /api/dev
-    target: http://backend-dev:3000
-    cors:
-      origins: ["*"]            # Override: this route accepts any origin
-
-corsOverrides:
-  - path: /api/auth/login
-    cors:
-      origins: ["*"]            # Login is public, accepts any origin
-```
-
-**Validation rules** (validated at startup, fail-fast):
-- `enabled=true` requires at least one origin in `origins`
-- `credentials=true` cannot be combined with `origins=["*"]`
-- `credentials=true` cannot be combined with `allowedHeaders=["*"]`
-
-**Preflight behavior**: An OPTIONS request with `Origin` header is treated as a preflight and responded with HTTP 204 (no backend invocation). This means preflights don't consume rate-limit, auth, or circuit-breaker resources.
-
-**Origin matching**: Case-insensitive comparison on `scheme + host + port` (normalized to lowercase). Wildcard `*` accepts any origin but disables `credentials`.
+Detalles completos, ejemplos YAML y referencia de la spec en [README.md §CORS](README.md).
 
 ### JWT Configuration
 
-JWT validation supports two modes (auto-detected by Zod per route):
+JWT soporta **dos modos** auto-detectados por Zod por ruta:
 
-1. **shared-secret (compat)** — HS256/HS384/HS512 with a local secret. No global config required. Each route declares its own `secret` and `algorithm`.
-2. **JWKS (RS256)** — Validates against a remote JWKS endpoint (RFC 7517). Requires a global `jwt.issuers[]` declaration. Multiple issuers can coexist.
+1. **shared-secret (compat)** — HS256/HS384/HS512 con secreto local. Cada ruta declara su propio `secret` + `algorithm`. No requiere sección global `jwt`.
+2. **JWKS (RS256)** — Validación contra endpoint JWKS remoto (RFC 7517). Requiere sección global `jwt.issuers[]`. Soporta múltiples issuers (multi-tenant).
 
-Precedencia (mayor a menor):
+**Precedencia** (mayor a menor): `jwtOverrides[path=X]` > `routes[].jwt` > `jwt` (global; solo JWKS).
 
-1. **`jwtOverrides[path=X]`** — path-exact JWT override
-2. **`routes[].jwt`** — per-route JWT config
-3. **`jwt`** (global) — used by JWKS mode routes
+**State machine del cache JWKS** (por issuer): `empty` (sin fetch) → `fresh` (≤ TTL, sirve directo) → `stale` (TTL < t ≤ stale_grace, sirve + dispara background refresh) → `expired` (refresh on miss sincrónico, gated por `refreshCooldownSeconds`).
 
-```yaml
-jwt:
-  enabled: true
-  mode: jwks                              # "shared-secret" | "jwks"
-  issuers:
-    - name: auth-service-prod
-      jwksUri: https://auth.flashdrop.cl/.well-known/jwks.json
-      issuer: "https://auth.flashdrop.cl" # claim `iss` esperado
-      audience: "flashdrop-api"           # claim `aud` esperado (opcional)
-      cacheTtlSeconds: 3600               # default: 3600 (1h)
-      staleGracePeriodSeconds: 1800       # default: 1800 (30min)
-      refreshCooldownSeconds: 30          # default: 30
-      refreshOnMiss: true                 # default: true
-      timeoutMs: 3000                     # default: 3000
+**Status codes**: `401` para fallos criptográficos (firma, expiración, claims, `kid`/`iss`/`aud` inválidos); `503` para indisponibilidad del Auth Service (fuera de `staleGracePeriodSeconds`).
 
-routes:
-  - prefix: /api/orders
-    target: http://orders-service:8084
-    jwt:
-      issuer: auth-service-prod           # ref a jwt.issuers[].name
-  - prefix: /api/public
-    target: http://public-service:8086
-    jwt:
-      issuer: any                         # acepta cualquier issuer registrado
-
-  # Compatibilidad HS256 (no requiere sección global):
-  - prefix: /api/protected
-    target: http://backend:3000
-    jwt:
-      enabled: true
-      secret: ${JWT_SECRET}
-      algorithm: HS256
-```
-
-**Validación al startup (fail-fast)**:
-- `jwksUri` debe ser una URL válida
-- No se permiten nombres de `issuer` duplicados en `jwt.issuers[]`
-- Cada `routes[].jwt.issuer` (≠ "any") debe existir en `jwt.issuers[]`
-- `routes[].jwt.issuer: "any"` requiere que `jwt.issuers[]` tenga al menos un issuer
-
-**State machine del cache JWKS** (por issuer):
-
-- `empty` → nunca se hizo fetch exitoso
-- `fresh` → dentro del TTL (`cacheTtlSeconds`) — sirve directo
-- `stale` → pasó el TTL pero dentro de `staleGracePeriodSeconds` — sirve + dispara background refresh
-- `expired` → pasó ambos — refresh on miss sincrónico (gated por `refreshCooldownSeconds`)
-
-**Status codes**:
-- `401 Unauthorized` — token con firma inválida, expirado, claims incorrectos, `kid` desconocido, `iss`/`aud` no coinciden
-- `503 Service Unavailable` — Auth Service inalcanzable más allá de `staleGracePeriodSeconds` (503 reservado para indisponibilidad de infraestructura; 401 reservado para fallos criptográficos)
+Detalles completos, ejemplos YAML, defaults numéricos y validación fail-fast en [README.md §JWT](README.md) y [specs/safegateway-jwt-jwks-validation.md](specs/safegateway-jwt-jwks-validation.md).
 
 ### JWT Metrics
 
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `gateway_jwt_validations_total` | Counter | `result` | Validaciones JWT procesadas. `result` ∈ `ok \| missing_token \| unknown_kid \| missing_kid \| expired \| invalid_issuer \| invalid_audience \| invalid_claims \| invalid_signature \| service_unavailable` (10 valores, baja cardinalidad). |
-| `gateway_jwks_refresh_total` | Counter | `result` | Refrescos del endpoint JWKS remoto. `result` ∈ `ok \| error \| cooldown` (3 valores). |
+Métricas Prometheus registradas por el plugin JWT (cardinalidad baja):
 
-Example PromQL queries:
-- Tasa de validaciones exitosas: `rate(gateway_jwt_validations_total{result="ok"}[5m])`
-- Tasa de 401: `sum(rate(gateway_jwt_validations_total{result=~"expired\|invalid_issuer\|invalid_audience\|invalid_signature\|unknown_kid\|missing_kid"}[5m]))`
-- Tasa de 503 (Auth Service caído): `rate(gateway_jwt_validations_total{result="service_unavailable"}[5m])`
-- Refresh errors: `rate(gateway_jwks_refresh_total{result="error"}[5m])`
-- Cooldown hits (potencial DoS): `rate(gateway_jwks_refresh_total{result="cooldown"}[5m])`
+- `gateway_jwt_validations_total{result}` — Counter. `result` ∈ `ok | missing_token | unknown_kid | missing_kid | expired | invalid_issuer | invalid_audience | invalid_claims | invalid_signature | service_unavailable` (10 valores).
+- `gateway_jwks_refresh_total{result}` — Counter. `result` ∈ `ok | error | cooldown` (3 valores).
+
+Queries PromQL de ejemplo (tasa de éxito, tasa de 401, tasa de 503, refresh errors, cooldown hits) en [README.md §JWT Metrics](README.md).
 
 ### Hot Reload (SIGHUP) Behavior
 - **Reloadable without restart**: `routes[].rateLimit`, `routes[].cors`, `routes[].jwt`, `overrides`, `cors`, `corsOverrides`, `jwt`, `jwtOverrides`, `logging.level`
@@ -291,6 +234,22 @@ Example PromQL queries:
 
 ### JSON Schema Autocomplete
 `config/gateway-schema.json` provides autocomplete/validation in VS Code via the Red Hat YAML extension (mapped in `.vscode/settings.json`). When modifying `src/config/schema.ts`, mirror changes into the JSON Schema to keep editor assistance in sync.
+
+### Environment Variables
+
+Variables leídas por el proceso (defaults fijados en `docker/Dockerfile`, algunas seteadas en `docker-compose.example.yml`):
+
+| Variable | Default | Notas |
+|----------|---------|-------|
+| `CONFIG_PATH` | `config/gateway.yaml` | Ruta del YAML. En el container, `docker-compose.example.yml` la deja en `/app/config/gateway.yaml` (efectivo: `docker/gateway.yaml` por el mount de `./docker` → `/app/config`). |
+| `REDIS_URL` | — (requerida) | Formato `redis://[user:pass@]host:port/db`. Alternativa: usar `${REDIS_URL}` interpolation en el YAML. |
+| `PORT` | `3000` | Bind del Fastify server. |
+| `HOST` | `0.0.0.0` | Bind host. |
+| `NODE_ENV` | `production` (en container) | Controla visibilidad de `stack` en respuestas de error (`buildErrorResponse`). Fuera de producción: stack incluido; en producción: omitido. |
+
+> ⚠️ **`LOG_LEVEL` está en `docker-compose.example.yml` pero el código NO la lee.** El gateway usa `logging.level` del YAML (`src/index.ts:32`, `src/config/reloader.ts:83`). La entry `LOG_LEVEL=info` en el compose es ruido. Si querés cambiar el nivel de log, editá `logging.level` en el YAML.
+
+`${VAR_NAME}` interpolation funciona en cualquier escalar del YAML (`${REDIS_URL}`, `${JWT_SECRET}`, etc.) y falla con `MissingEnvVarError` al startup si la variable no está seteada.
 
 ## Adding a New Plugin
 
@@ -323,11 +282,8 @@ Example PromQL queries:
 
 ### CORS Metrics
 
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `gateway_cors_requests_total` | Counter | `decision` | Total requests processed by CORS plugin. `decision` ∈ `allowed` \| `blocked` \| `preflight` \| `no_origin` (low-cardinality, 4 values). |
+Métricas Prometheus registradas por el plugin CORS:
 
-Example PromQL queries:
-- Preflight rate: `rate(gateway_cors_requests_total{decision="preflight"}[5m])`
-- Blocked origins: `rate(gateway_cors_requests_total{decision="blocked"}[5m])`
-- % of requests with `Origin` header: `sum(rate(gateway_cors_requests_total{decision=~"allowed|blocked|preflight"})) / sum(rate(gateway_cors_requests_total))`
+- `gateway_cors_requests_total{decision}` — Counter. `decision` ∈ `allowed | blocked | preflight | no_origin` (4 valores, baja cardinalidad).
+
+Queries PromQL (preflight rate, blocked origins, % de requests con `Origin` header) en [README.md §CORS Metrics](README.md).

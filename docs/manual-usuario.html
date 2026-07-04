@@ -1,0 +1,2160 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8" />
+<title>Gateway HTTP Modular — Manual de Usuario</title>
+<style>
+  /* ============================================================
+     Foundation
+     ============================================================ */
+  :root {
+    --ink: #0f172a;
+    --ink-soft: #334155;
+    --ink-mute: #64748b;
+    --line: #e2e8f0;
+    --line-soft: #f1f5f9;
+    --paper: #ffffff;
+    --paper-alt: #f8fafc;
+    --brand: #1e3a8a;
+    --brand-soft: #eff6ff;
+    --accent: #0ea5e9;
+    --ok: #16a34a;
+    --warn: #ca8a04;
+    --danger: #dc2626;
+    --code-bg: #0b1220;
+    --code-fg: #e2e8f0;
+    --code-key: #93c5fd;
+    --code-str: #86efac;
+    --code-num: #fcd34d;
+    --code-com: #94a3b8;
+    --shadow: 0 2px 4px rgba(15,23,42,.05), 0 8px 24px rgba(15,23,42,.04);
+  }
+  @page {
+    size: A4;
+    margin: 22mm 18mm 22mm 18mm;
+  }
+  @page :first {
+    margin: 0;
+  }
+  html, body { background: #fff; color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ============================================================
+     Cover
+     ============================================================ */
+  .cover {
+    page-break-after: always;
+    height: 297mm;
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    background:
+      linear-gradient(180deg, #0b1e4a 0%, #1e3a8a 60%, #1e40af 100%);
+    color: #fff;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+  }
+  .cover-mark {
+    position: absolute;
+    top: 18mm;
+    left: 18mm;
+    font-size: 9pt;
+    letter-spacing: 4px;
+    color: #93c5fd;
+    text-transform: uppercase;
+  }
+  .cover-body {
+    padding: 80mm 18mm 0;
+    text-align: left;
+  }
+  .cover-title {
+    font-size: 38pt;
+    line-height: 1.1;
+    font-weight: 800;
+    margin: 0 0 6mm;
+    letter-spacing: -.5px;
+  }
+  .cover-subtitle {
+    font-size: 14pt;
+    font-weight: 400;
+    color: #bfdbfe;
+    max-width: 150mm;
+    line-height: 1.4;
+    margin: 0;
+  }
+  .cover-meta {
+    position: absolute;
+    bottom: 18mm;
+    left: 18mm;
+    right: 18mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9pt;
+    color: #cbd5e1;
+    border-top: 1px solid rgba(255,255,255,.25);
+    padding-top: 6mm;
+  }
+
+  /* ============================================================
+     Typography
+     ============================================================ */
+  h1, h2, h3, h4 { color: var(--ink); margin: 0; line-height: 1.25; }
+  h1 {
+    font-size: 22pt;
+    font-weight: 800;
+    margin: 0 0 5mm;
+    letter-spacing: -.5px;
+    border-bottom: 3px solid var(--brand);
+    padding-bottom: 3mm;
+  }
+  h2 {
+    font-size: 15pt;
+    font-weight: 700;
+    margin: 9mm 0 3mm;
+    color: var(--brand);
+    letter-spacing: -.2px;
+  }
+  h3 {
+    font-size: 11.5pt;
+    font-weight: 700;
+    margin: 6mm 0 2mm;
+    color: var(--ink);
+  }
+  h4 {
+    font-size: 10.5pt;
+    font-weight: 700;
+    margin: 4mm 0 1.5mm;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  p { margin: 0 0 3mm; }
+  strong { color: var(--ink); font-weight: 700; }
+  em { color: var(--ink-soft); }
+  hr {
+    border: none;
+    border-top: 1px dashed var(--line);
+    margin: 6mm 0;
+  }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+
+  /* ============================================================
+     Sections
+     ============================================================ */
+  section { page-break-inside: auto; }
+  section + section { margin-top: 6mm; }
+
+  .lead {
+    font-size: 11pt;
+    color: var(--ink-soft);
+    line-height: 1.6;
+    background: var(--paper-alt);
+    border-left: 4px solid var(--brand);
+    padding: 4mm 6mm;
+    margin-bottom: 5mm;
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* ============================================================
+     TOC
+     ============================================================ */
+  nav.toc {
+    page-break-after: always;
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6mm 8mm;
+  }
+  nav.toc h2 {
+    margin-top: 0;
+  }
+  nav.toc ol { list-style: decimal; padding-left: 5mm; }
+  nav.toc ol ol { list-style: lower-alpha; }
+  nav.toc a {
+    color: var(--ink);
+    text-decoration: none;
+    display: block;
+    padding: 1.2mm 0;
+    border-bottom: 1px dotted var(--line);
+  }
+  nav.toc a:hover { color: var(--brand); }
+  nav.toc .level-1 { font-weight: 700; }
+  nav.toc .level-2 { color: var(--ink-soft); padding-left: 6mm !important; font-size: 9.5pt; }
+
+  /* ============================================================
+     Code blocks
+     ============================================================ */
+  pre, code { font-family: "JetBrains Mono", "Fira Code", "Consolas", "Liberation Mono", monospace; }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 4mm 5mm;
+    border-radius: 5px;
+    font-size: 8.8pt;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin: 2mm 0 4mm;
+    box-shadow: var(--shadow);
+    page-break-inside: avoid;
+  }
+  code {
+    background: var(--paper-alt);
+    color: var(--ink);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9pt;
+    border: 1px solid var(--line);
+  }
+  pre code {
+    background: none;
+    color: inherit;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  /* YAML syntax tokens (manual coloring) */
+  pre .k { color: var(--code-key); }
+  pre .s { color: var(--code-str); }
+  pre .n { color: var(--code-num); }
+  pre .c { color: var(--code-com); font-style: italic; }
+  pre .p { color: #f0abfc; }
+  pre .b { color: #fdba74; font-weight: 600; }
+  pre .t { color: #f9a8d4; }
+
+  /* ============================================================
+     Tables
+     ============================================================ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3mm 0 4mm;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 2mm 3mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+    font-size: 9pt;
+    letter-spacing: .3px;
+  }
+  tbody tr:nth-child(even) { background: var(--paper-alt); }
+  td code { font-size: 8.8pt; }
+
+  /* ============================================================
+     Callouts
+     ============================================================ */
+  .callout {
+    border-radius: 5px;
+    padding: 3mm 5mm;
+    margin: 3mm 0 4mm;
+    border-left: 4px solid;
+    page-break-inside: avoid;
+  }
+  .callout-title {
+    font-weight: 700;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 1mm;
+  }
+  .callout-tip { background: #ecfdf5; border-color: var(--ok); color: #065f46; }
+  .callout-warn { background: #fffbeb; border-color: var(--warn); color: #92400e; }
+  .callout-danger { background: #fef2f2; border-color: var(--danger); color: #991b1b; }
+  .callout-info { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+
+  /* ============================================================
+     Definition blocks
+     ============================================================ */
+  .def {
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3mm 5mm;
+    margin: 2mm 0 4mm;
+    page-break-inside: avoid;
+  }
+  .def h4 { margin: 0 0 2mm; }
+  .def pre { margin: 2mm 0 0; }
+  .def + .def { margin-top: 3mm; }
+  .def-table th { background: var(--ink-soft); }
+
+  /* ============================================================
+     Use-case badge
+     ============================================================ */
+  .scenario-tag {
+    display: inline-block;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    padding: 1mm 3mm;
+    border-radius: 12px;
+    margin-right: 2mm;
+    color: #fff;
+    background: var(--accent);
+  }
+  .scenario-tag.basic { background: var(--ink-mute); }
+  .scenario-tag.production { background: var(--brand); }
+  .scenario-tag.advanced { background: #7c3aed; }
+
+  /* ============================================================
+     Page break helpers
+     ============================================================ */
+  .page-break { page-break-before: always; }
+  .keep-together { page-break-inside: avoid; }
+
+  /* ============================================================
+     Quick-glance grid
+     ============================================================ */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3.5mm 4mm;
+    background: var(--paper);
+    page-break-inside: avoid;
+  }
+  .card h4 { margin-top: 0; color: var(--brand); }
+  .card p { font-size: 9.5pt; margin-bottom: 0; }
+
+  /* ============================================================
+     Footer
+     ============================================================ */
+  footer.appendix {
+    margin-top: 10mm;
+    padding-top: 4mm;
+    border-top: 1px solid var(--line);
+    font-size: 9pt;
+    color: var(--ink-mute);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     COVER
+     ============================================================ -->
+<section class="cover">
+  <div class="cover-mark">GATEWAY HTTP MODULAR</div>
+  <div class="cover-body">
+    <h1 class="cover-title">Manual de Usuario</h1>
+    <p class="cover-subtitle">
+      Guía operativa para configurar, desplegar y operar el Gateway HTTP
+      Modular: reverse proxy sobre Undici, middleware pipeline (rate-limit,
+      CORS, JWT, circuit breaker), hot-reload por SIGHUP, métricas Prometheus
+      y agregación de health.
+    </p>
+  </div>
+  <div class="cover-meta">
+    <div>
+      <strong>v1.0</strong><br />
+      Julio 2026
+    </div>
+    <div style="text-align:right;">
+      Equipo de Ingeniería<br />
+      <strong>gateway-http-modular</strong>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     RESUMEN EJECUTIVO
+     ============================================================ -->
+<section>
+  <h1>Resumen ejecutivo</h1>
+  <p class="lead">
+    El Gateway HTTP Modular es un reverse proxy escrito en TypeScript sobre
+    Fastify + Undici, pensado como capa única de entrada para arquitecturas
+    basadas en microservicios. Reúne las capacidades comunes que toda
+    organización termina reimplementando (cors, rate-limit, autenticación JWT,
+    circuit breaker, métricas, health) detrás de un único archivo de
+    configuración declarativo, con hot-reload sin downtime y trazabilidad
+    operativa completa.
+  </p>
+
+  <h3>Qué problema resuelve</h3>
+  <ul>
+    <li><strong>Punto único de entrada configurable</strong> para microservicios,
+      frontends y backends legacy, sin reescribir cada servicio.</li>
+    <li><strong>Seguridad transversal</strong>: rate-limit por IP/ventana, CORS
+      por origen, validación JWT contra JWKS remoto, circuit breaker para
+      aislar backends caídos.</li>
+    <li><strong>Observabilidad</strong>: endpoint <code>/metrics</code> en
+      Prometheus, endpoint agregado <code>/health</code>, logs estructurados en
+      JSON.</li>
+    <li><strong>Operación sin downtime</strong>: reload por
+      <code>SIGHUP</code> de rate-limits, CORS, JWT y niveles de log, sin
+      reconectar a Redis ni reiniciar Fastify.</li>
+  </ul>
+
+  <h3>Stack técnico</h3>
+  <table>
+    <thead>
+      <tr><th>Componente</th><th>Tecnología</th><th>Propósito</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Runtime</td><td>Node.js 20+ / TypeScript</td><td>Servicio standalone con build ESM</td></tr>
+      <tr><td>Servidor HTTP</td><td>Fastify 5.x</td><td>Framework de routing y hooks</td></tr>
+      <tr><td>Cliente upstream</td><td>Undici 6.x</td><td>Pool HTTP/1.1 y HTTP/2 de alto rendimiento</td></tr>
+      <tr><td>Rate limiting</td><td>Redis 7+ (ioredis)</td><td>Contadores fijos por ventana temporal</td></tr>
+      <tr><td>JWT</td><td>jose</td><td>Validación HS256/HS384/HS512 y JWKS RS256</td></tr>
+      <tr><td>Logs</td><td>Pino 10.x</td><td>Logging estructurado JSON con redacción</td></tr>
+      <tr><td>Métricas</td><td>prom-client</td><td>Endpoint <code>/metrics</code> Prometheus</td></tr>
+      <tr><td>Validación config</td><td>Zod</td><td>Schema tipado con fall-fast al startup</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Para quién es este manual</h3>
+  <ul>
+    <li><strong>Operadores / SRE</strong> que despliegan y monitorean el gateway en producción.</li>
+    <li><strong>Desarrolladores backend</strong> que exponen nuevos servicios detrás del gateway.</li>
+    <li><strong>Integradores</strong> que ajustan CORS, JWT y políticas de rate-limit por tenant.</li>
+  </ul>
+</section>
+
+<!-- ============================================================
+     TOC
+     ============================================================ -->
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ol>
+    <li><a class="level-1" href="#cap-inicio">Inicio rápido</a></li>
+    <li><a class="level-1" href="#cap-anatomia">Anatomía del archivo de configuración</a></li>
+    <li><a class="level-1" href="#cap-server">Servidor y red</a></li>
+    <li><a class="level-1" href="#cap-redis">Redis para rate limiting</a></li>
+    <li><a class="level-1" href="#cap-logging">Logging</a></li>
+    <li><a class="level-1" href="#cap-health">Health Aggregation</a></li>
+    <li><a class="level-1" href="#cap-rutas">Rutas: el reverse proxy</a></li>
+    <li><a class="level-1" href="#cap-ratelimit">Rate limiting y overrides</a></li>
+    <li><a class="level-1" href="#cap-cors">CORS</a></li>
+    <li><a class="level-1" href="#cap-jwt">Autenticación JWT</a></li>
+    <li><a class="level-1" href="#cap-cb">Circuit breaker y reintentos</a></li>
+    <li><a class="level-1" href="#cap-metrics">Métricas Prometheus</a></li>
+    <li><a class="level-1" href="#cap-hotreload">Hot reload (SIGHUP)</a></li>
+    <li><a class="level-1" href="#cap-docker">Despliegue con Docker</a></li>
+    <li><a class="level-1" href="#cap-troubleshoot">Solución de problemas</a></li>
+    <li><a class="level-1" href="#cap-anexo">Anexo: hoja de referencia rápida</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================
+     CAP 1 — INICIO RÁPIDO
+     ============================================================ -->
+<section id="cap-inicio">
+  <h1>1. Inicio rápido</h1>
+
+  <p>
+    Esta sección asume un entorno local Linux/macOS con Node.js 20+ y un
+    Redis accesible en <code>localhost:6379</code>. Si solo quieres ver el
+    Gateway funcionando en menos de 5 minutos, sigue el camino directo.
+  </p>
+
+  <h3>Paso 1 — Instalar dependencias</h3>
+  <p>El proyecto usa <strong>pnpm</strong> exclusivamente. Nunca uses
+  <code>npm</code> ni <code>npx</code> por convención del repositorio.</p>
+
+<pre><code><span class="c"># Desde la raíz del proyecto</span>
+pnpm install</code></pre>
+
+  <h3>Paso 2 — Levantar Redis</h3>
+  <p>Puedes usar un Redis nativo, Docker, o el <code>docker-compose</code> de
+  la plantilla en <code>docker/docker-compose.example.yml</code>:</p>
+
+<pre><code><span class="c"># Con docker</span>
+docker run -d --name gateway-redis -p 6379:6379 redis:7-alpine
+
+<span class="c"># O desde la plantilla (incluye también un backend mock, Dozzle, Prometheus y Grafana)</span>
+docker compose -f docker/docker-compose.example.yml up -d redis-cache</code></pre>
+
+  <h3>Paso 3 — Definir la variable de entorno obligatoria</h3>
+<pre><code><span class="c"># Linux / macOS</span>
+export REDIS_URL=<span class="s">"redis://localhost:6379"</span>
+
+<span class="c"># Windows PowerShell</span>
+$env:REDIS_URL = <span class="s">"redis://localhost:6379"</span></code></pre>
+
+  <h3>Paso 4 — Arrancar el gateway en modo desarrollo</h3>
+<pre><code>pnpm dev</code></pre>
+
+  <p>El comando ejecuta <code>tsx watch src/index.ts</code> y el gateway queda
+  escuchando en <code>http://0.0.0.0:3000</code> con hot-reload de TypeScript
+  ante cualquier cambio en <code>src/</code>.</p>
+
+  <h3>Paso 5 — Probar que funciona</h3>
+<pre><code><span class="c"># Endpoint de salud agregado</span>
+curl http://localhost:3000/health
+
+<span class="c"># Métricas Prometheus</span>
+curl http://localhost:3000/metrics
+
+<span class="c"># Ruta /api definida en gateway.yaml — proxea a http://localhost:8080</span>
+curl http://localhost:3000/api/usuarios</code></pre>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Listo</div>
+    <p>
+      Si los tres comandos respondieron correctamente tienes el gateway
+      operativo con configuración por defecto. Continúa con el capítulo 2
+      para entender qué controla cada sección de <code>gateway.yaml</code>.
+    </p>
+  </div>
+
+  <h3>Comandos útiles del día a día</h3>
+  <table>
+    <thead>
+      <tr><th>Comando</th><th>Propósito</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>pnpm dev</code></td><td>Desarrollo con watch de TypeScript</td></tr>
+      <tr><td><code>pnpm build</code></td><td>Compila a <code>dist/</code> (producción)</td></tr>
+      <tr><td><code>pnpm start</code></td><td>Arranca el binario compilado</td></tr>
+      <tr><td><code>pnpm test</code></td><td>Suite completa (Vitest)</td></tr>
+      <tr><td><code>pnpm test:unit</code></td><td>Solo tests unitarios</td></tr>
+      <tr><td><code>pnpm test:integration</code></td><td>Solo tests de integración</td></tr>
+      <tr><td><code>pnpm lint</code></td><td>Lint sobre <code>src/</code> y <code>tests/</code></td></tr>
+      <tr><td><code>pnpm format</code></td><td>Formatea con Prettier</td></tr>
+      <tr><td><code>pnpm docker:build</code></td><td>Build de la imagen Docker del gateway</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================
+     CAP 2 — ANATOMÍA
+     ============================================================ -->
+<section id="cap-anatomia" class="page-break">
+  <h1>2. Anatomía del archivo de configuración</h1>
+
+  <p>
+    Toda la configuración del gateway vive en un único archivo YAML:
+    <code>config/gateway.yaml</code>. Su ruta puede sobreescribirse con la
+    variable de entorno <code>CONFIG_PATH</code>. El archivo es validado por
+    Zod al arrancar: cualquier error produce un mensaje claro y el proceso
+    aborta con exit code 1 (fail-fast).
+  </p>
+
+  <h3>Esqueleto mínimo</h3>
+<pre><code><span class="c"># config/gateway.yaml</span>
+
+<span class="k">server:</span>           <span class="c"># Puerto y host del gateway</span>
+  <span class="k">port:</span> <span class="n">3000</span>
+  <span class="k">host:</span> <span class="s">"0.0.0.0"</span>
+
+<span class="k">redis:</span>            <span class="c"># Conexión y comportamiento ante fallos</span>
+  <span class="k">url:</span> <span class="s">"${REDIS_URL}"</span>
+  <span class="k">onFailure:</span> <span class="s">"open"</span>
+
+<span class="k">logging:</span>
+  <span class="k">level:</span> <span class="s">"info"</span>
+
+<span class="k">routes:</span>           <span class="c"># Mínimo 1 ruta requerida</span>
+  - <span class="k">prefix:</span> <span class="s">"/api"</span>
+    <span class="k">target:</span> <span class="s">"http://localhost:8080"</span></code></pre>
+
+  <h3>Top-level: qué controla cada bloque</h3>
+  <table>
+    <thead>
+      <tr><th>Bloque</th><th>Función</th><th>Capítulo</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>server</code></td><td>Puerto y bind del servidor Fastify</td><td><a href="#cap-server">3</a></td></tr>
+      <tr><td><code>redis</code></td><td>Conexión al Redis usado por rate-limit</td><td><a href="#cap-redis">4</a></td></tr>
+      <tr><td><code>logging</code></td><td>Nivel de log Pino</td><td><a href="#cap-logging">5</a></td></tr>
+      <tr><td><code>health</code></td><td>Endpoint agregado de health</td><td><a href="#cap-health">6</a></td></tr>
+      <tr><td><code>routes</code></td><td>Reverse proxy: prefijos y backends</td><td><a href="#cap-rutas">7</a></td></tr>
+      <tr><td><code>overrides</code></td><td>Rate-limit por path exacto</td><td><a href="#cap-ratelimit">8</a></td></tr>
+      <tr><td><code>cors</code> + <code>corsOverrides</code></td><td>Política CORS global</td><td><a href="#cap-cors">9</a></td></tr>
+      <tr><td><code>jwt</code> + <code>jwtOverrides</code></td><td>Validación JWT (JWKS o shared secret)</td><td><a href="#cap-jwt">10</a></td></tr>
+      <tr><td><code>metrics</code></td><td>Endpoint Prometheus y labels</td><td><a href="#cap-metrics">12</a></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Interpolación de variables</div>
+    <p>
+      Cualquier valor escalar acepta la sintaxis
+      <code>${NOMBRE_VARIABLE}</code>. Si la variable no está definida, el
+      arranque falla con <code>MissingEnvVarError</code>. Es la forma
+      recomendada de manejar secretos en pipelines CI/CD.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 3 — SERVER
+     ============================================================ -->
+<section id="cap-server" class="page-break">
+  <h1>3. Servidor y red</h1>
+
+  <p>
+    Define en qué puerto y dirección escucha el gateway. Cualquier cambio en
+    este bloque <strong>requiere reinicio</strong> (no es hot-reloadable) porque
+    implica re-bindear el socket TCP.
+  </p>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th style="width:22%;">Campo</th><th>Tipo</th><th>Por defecto</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>port</code></td><td>number 1–65535</td><td>3000</td><td>Puerto TCP donde escucha Fastify</td></tr>
+      <tr><td><code>host</code></td><td>string</td><td><code>0.0.0.0</code></td><td>Interfaz de bind. Use <code>127.0.0.1</code> para localhost únicamente</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo — desarrollo local</h3>
+<pre><code><span class="k">server:</span>
+  <span class="k">port:</span> <span class="n">3000</span>
+  <span class="k">host:</span> <span class="s">"127.0.0.1"</span></code></pre>
+
+  <h3>Ejemplo — dentro de contenedor Docker</h3>
+<pre><code><span class="k">server:</span>
+  <span class="k">port:</span> <span class="n">${PORT}</span>            <span class="c"># viene de la variable de entorno del contenedor</span>
+  <span class="k">host:</span> <span class="s">"0.0.0.0"</span>        <span class="c"># obligatorio para aceptar tráfico desde fuera del container</span></code></pre>
+
+  <h3>Ejemplo — producción detrás de un load balancer</h3>
+<pre><code><span class="k">server:</span>
+  <span class="k">port:</span> <span class="n">8080</span>
+  <span class="k">host:</span> <span class="s">"0.0.0.0"</span></code></pre>
+
+  <p>Cuando el gateway está detrás de un ALB/Nginx, los headers
+  <code>X-Forwarded-For</code>, <code>X-Forwarded-Proto</code> y
+  <code>X-Forwarded-Host</code> se reenvían al upstream para que los servicios
+  vean la IP real del cliente. El rate-limiter usa siempre
+  <code>request.ip</code> que Fastify resuelve correctamente con la cabecera
+  adecuada.</p>
+
+  <div class="callout callout-warn">
+    <div class="callout-title">Cuidado</div>
+    <p>
+      Si modificas <code>server.port</code> o <code>server.host</code> en un
+      archivo ya cargado, el gateway lo registra como <code>warn</code> y lo
+      ignora hasta el próximo reinicio. Usa <code>SIGHUP</code> solo para
+      cambios hot-reloadables (ver <a href="#cap-hotreload">capítulo 13</a>).
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 4 — REDIS
+     ============================================================ -->
+<section id="cap-redis" class="page-break">
+  <h1>4. Redis para rate limiting</h1>
+
+  <p>
+    El gateway usa Redis como backend de contadores para rate limiting. Es la
+    única dependencia externa obligatoria y se conecta al arrancar con hasta
+    tres reintentos espaciados un segundo; si los tres fallan el proceso
+    aborta.
+  </p>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th style="width:25%;">Campo</th><th>Tipo</th><th>Por defecto</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>url</code></td><td>string</td><td>—</td><td>URL completa tipo <code>redis://host:puerto</code> o <code>rediss://</code> para TLS</td></tr>
+      <tr><td><code>onFailure</code></td><td>enum</td><td><code>open</code></td><td>Comportamiento si Redis falla en runtime: <code>open</code> deja pasar, <code>closed</code> responde 503</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo — Redis local sin autenticación</h3>
+<pre><code><span class="k">redis:</span>
+  <span class="k">url:</span> <span class="s">"${REDIS_URL}"</span>
+  <span class="k">onFailure:</span> <span class="s">"open"</span></code></pre>
+  <pre><code><span class="c"># .env o exportación manual</span>
+REDIS_URL=<span class="s">"redis://localhost:6379"</span></code></pre>
+
+  <h3>Ejemplo — Redis con autenticación por password</h3>
+<pre><code><span class="k">redis:</span>
+  <span class="k">url:</span> <span class="s">"redis://:${REDIS_PASSWORD}@redis-prod.internal:6379/0"</span>
+  <span class="k">onFailure:</span> <span class="s">"closed"</span></code></pre>
+
+  <h3>Ejemplo — Redis en clúster con TLS</h3>
+<pre><code><span class="k">redis:</span>
+  <span class="k">url:</span> <span class="s">"rediss://cache-cluster.example.com:6380"</span>
+  <span class="k">onFailure:</span> <span class="s">"open"</span></code></pre>
+
+  <h3>Decidir entre <code>open</code> y <code>closed</code></h3>
+  <div class="grid-2">
+    <div class="card">
+      <h4><code>onFailure: open</code></h4>
+      <p>
+        Si Redis se cae, las requests <strong>pasan sin rate-limit</strong>.
+        Prioriza disponibilidad sobre control de abuso. Útil para servicios
+        internos donde un atacante ya está dentro del perímetro.
+      </p>
+    </div>
+    <div class="card">
+      <h4><code>onFailure: closed</code></h4>
+      <p>
+        Si Redis se cae, todas las requests devuelven <code>503 Service
+        Unavailable</code>. Prioriza protección. Útil cuando el rate-limit es
+        contractual (tiers de API de pago) y tolerar abuso es peor que perder
+        tráfico.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Buena práctica</div>
+    <p>
+      En producción usa siempre <code>onFailure: closed</code> con un
+      Redis gestionado de alta disponibilidad (ElastiCache, Memorystore,
+      Upstash). Configurar fall-open por error operacional suele terminar
+      abriendo la puerta a abuso masivo justo cuando más necesitas
+      protección.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 5 — LOGGING
+     ============================================================ -->
+<section id="cap-logging" class="page-break">
+  <h1>5. Logging</h1>
+
+  <p>
+    El logger es Pino, con salida en JSON y redacción automática de cabeceras
+    sensibles. Los secretos (<code>authorization</code>, <code>cookie</code>,
+    <code>proxy-authorization</code>, <code>set-cookie</code>) nunca aparecen
+    en los logs.
+  </p>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Valores aceptados</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>level</code></td>
+        <td><code>debug</code> · <code>info</code> · <code>warn</code> · <code>error</code></td>
+        <td><code>info</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo — producción con nivel info</h3>
+<pre><code><span class="k">logging:</span>
+  <span class="k">level:</span> <span class="s">"info"</span></code></pre>
+
+  <h3>Ejemplo — diagnóstico puntual</h3>
+<pre><code><span class="k">logging:</span>
+  <span class="k">level:</span> <span class="s">"debug"</span></code></pre>
+
+  <p>
+    <code>debug</code> añade trazas de decisiones CORS, transición de circuitos,
+    refresh de JWKS, etc. Es ruidoso y no apto para producción continua. Se
+    cambia en caliente con <code>SIGHUP</code>.
+  </p>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Ejemplo de log</div>
+<pre><code>{
+  <span class="k">"level"</span>: <span class="n">30</span>,
+  <span class="k">"time"</span>: <span class="s">"2026-07-04T21:24:18.812Z"</span>,
+  <span class="k">"cors"</span>: { <span class="k">"decision"</span>: <span class="s">"allowed"</span>, <span class="k">"origin"</span>: <span class="s">"https://app.flashdrop.cl"</span> },
+  <span class="k">"route"</span>: <span class="s">"/api/orders"</span>,
+  <span class="k">"reqId"</span>: <span class="s">"3c4f-..."</span>,
+  <span class="k">"msg"</span>: <span class="s">"cors: allowed origin"</span>
+}</code></pre>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 6 — HEALTH
+     ============================================================ -->
+<section id="cap-health" class="page-break">
+  <h1>6. Health Aggregation</h1>
+
+  <p>
+    El endpoint <code>GET /health</code> consulta en paralelo el
+    <code>backendPath</code> de cada backend declarado en <code>routes[]</code>
+    y devuelve un JSON agregado con el estado por servicio. Está pensado para
+    readiness probes de Kubernetes, load balancers externos y dashboards de
+    observabilidad.
+  </p>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th style="width:25%;">Campo</th><th>Tipo</th><th>Default</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td>boolean</td><td><code>true</code></td><td>Si está en <code>false</code> el endpoint devuelve 404</td></tr>
+      <tr><td><code>path</code></td><td>string</td><td><code>/health</code></td><td>Path donde el gateway expone el agregado</td></tr>
+      <tr><td><code>backendPath</code></td><td>string</td><td><code>/health</code></td><td>Path a consultar en cada backend downstream</td></tr>
+      <tr><td><code>timeoutMs</code></td><td>int &gt; 0</td><td><code>2000</code></td><td>Timeout por servicio; cumplido el plazo se marca como <code>down</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Mapeo de estados</h3>
+  <table>
+    <thead>
+      <tr><th>Respuesta del backend</th><th>Estado por servicio</th><th>Estado global</th><th>Código HTTP</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>2xx / 3xx</td><td><code>ok</code></td><td rowspan="3"><code>down</code> si alguno cae, <code>degraded</code> si no hay ninguno caído pero sí degraded, si no <code>ok</code></td><td rowspan="3"><code>503</code> si global down, <code>200</code> en cualquier otro caso</td></tr>
+      <tr><td>4xx</td><td><code>degraded</code></td></tr>
+      <tr><td>5xx, timeout, ECONNREFUSED</td><td><code>down</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — configuración estándar</h3>
+<pre><code><span class="k">health:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">path:</span> <span class="s">"/health"</span>
+  <span class="k">backendPath:</span> <span class="s">"/health"</span>
+  <span class="k">timeoutMs:</span> <span class="n">2000</span></code></pre>
+
+  <h3>Ejemplo B — health deshabilitado (para entornos efímeros)</h3>
+<pre><code><span class="k">health:</span>
+  <span class="k">enabled:</span> <span class="b">false</span></code></pre>
+
+  <h3>Ejemplo C — path personalizado por entorno</h3>
+<pre><code><span class="k">health:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">path:</span> <span class="s">"/status"</span>          <span class="c"># endpoint expuesto por el gateway</span>
+  <span class="k">backendPath:</span> <span class="s">"/internal/health"</span>   <span class="c"># endpoint de cada microservicio</span>
+  <span class="k">timeoutMs:</span> <span class="n">1500</span></code></pre>
+
+  <h3>Ejemplo de respuesta</h3>
+<pre><code>{
+  <span class="k">"status"</span>: <span class="s">"degraded"</span>,
+  <span class="k">"timestamp"</span>: <span class="s">"2026-07-04T21:24:18.812Z"</span>,
+  <span class="k">"services"</span>: [
+    {
+      <span class="k">"name"</span>: <span class="s">"orders-service"</span>,
+      <span class="k">"status"</span>: <span class="s">"ok"</span>,
+      <span class="k">"statusCode"</span>: <span class="n">200</span>,
+      <span class="k">"latencyMs"</span>: <span class="n">18</span>
+    },
+    {
+      <span class="k">"name"</span>: <span class="s">"catalog-service"</span>,
+      <span class="k">"status"</span>: <span class="s">"down"</span>,
+      <span class="k">"latencyMs"</span>: <span class="n">2000</span>,
+      <span class="k">"error"</span>: <span class="s">"timeout after 2000ms"</span>
+    }
+  ]
+}</code></pre>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Resolución de nombres</div>
+    <p>
+      El campo <code>name</code> de cada servicio se resuelve como
+      <code>route.backendName ?? hostname(target) ?? route.prefix</code>. Si
+      necesitas un nombre legible en Prometheus y Grafana, define
+      <code>backendName</code> en cada ruta.
+    </p>
+  </div>
+
+  <p>
+    El endpoint de health NO consume rate-limit, no requiere autenticación, no
+    pasa por el pipeline de proxy y se excluye de las métricas
+    <code>gateway_http_*</code>. Las decisiones operativas sobre el estado
+    global son responsabilidad del cliente que consulta (load balancer,
+    Kubernetes).
+  </p>
+</section>
+
+<!-- ============================================================
+     CAP 7 — RUTAS (Reverse proxy)
+     ============================================================ -->
+<section id="cap-rutas" class="page-break">
+  <h1>7. Rutas: el reverse proxy</h1>
+
+  <p>
+    El bloque <code>routes[]</code> es el corazón del gateway. Cada elemento
+    declara una regla de reenvío: cuando llega una request a un path que
+    empieza con <code>prefix</code>, se redirige a <code>target</code> usando
+    Undici como cliente HTTP.
+  </p>
+
+  <h3>Reglas de matching</h3>
+  <ol>
+    <li><strong>Exact override</strong>: si el path coincide con un
+      <code>overrides[].path</code>, gana sobre cualquier ruta.</li>
+    <li><strong>Longest prefix</strong>: si hay varias rutas con prefijos
+      coincidentes, gana la más larga.</li>
+    <li><strong>Sin coincidencia</strong>: el gateway responde
+      <code>404 Not Found</code> (excepto <code>/metrics</code> y
+      <code>/health</code> que están reservados).</li>
+  </ol>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Requerido</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>prefix</code></td><td>string</td><td>sí</td><td>Prefijo de la ruta; debe comenzar con <code>/</code> y no terminar con <code>/</code> (excepto la raíz <code>/</code>)</td></tr>
+      <tr><td><code>target</code></td><td>URL http(s)</td><td>sí</td><td>URL del backend upstream</td></tr>
+      <tr><td><code>stripPrefix</code></td><td>boolean</td><td>no</td><td>Si es <code>true</code>, el prefijo se elimina del path antes de enviar al upstream</td></tr>
+      <tr><td><code>rateLimit</code></td><td>objeto</td><td>no</td><td>Política de rate-limit por IP</td></tr>
+      <tr><td><code>timeout</code></td><td>objeto</td><td>no</td><td>Tiempos máximos de espera por fase de la conexión upstream</td></tr>
+      <tr><td><code>jwt</code></td><td>objeto</td><td>no</td><td>Política de autenticación JWT</td></tr>
+      <tr><td><code>circuitBreaker</code></td><td>objeto</td><td>no</td><td>Política de circuit breaker y retries</td></tr>
+      <tr><td><code>cors</code></td><td>objeto</td><td>no</td><td>Override parcial de CORS para esta ruta</td></tr>
+      <tr><td><code>retryableMethods</code></td><td>string[]</td><td>no</td><td>Métodos HTTP que se reintentan ante fallo de red</td></tr>
+      <tr><td><code>metricsLabel</code></td><td>string</td><td>no</td><td>Etiqueta de baja cardinalidad en métricas</td></tr>
+      <tr><td><code>backendName</code></td><td>string</td><td>no</td><td>Nombre lógico del backend para health aggregation</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — el mínimo viable</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api"</span>
+    <span class="k">target:</span> <span class="s">"http://localhost:8080"</span></code></pre>
+  <p>
+    Toda request a <code>http://gateway/api/usuarios</code> se reenvía a
+    <code>http://localhost:8080/api/usuarios</code>.
+  </p>
+
+  <h3>Ejemplo B — <code>stripPrefix</code> para reescritura</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/admin"</span>
+    <span class="k">target:</span> <span class="s">"http://localhost:9090"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span></code></pre>
+  <p>
+    <code>GET /admin/usuarios</code> → <code>GET http://localhost:9090/usuarios</code>.
+  </p>
+
+  <h3>Ejemplo C — múltiples microservicios con timeouts diferenciados</h3>
+<pre><code><span class="k">routes:</span>
+  <span class="c"># Auth — rápido</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/auth"</span>
+    <span class="k">target:</span> <span class="s">"http://auth-service:8082"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">backendName:</span> <span class="s">"auth"</span>
+    <span class="k">timeout:</span>
+      <span class="k">connect:</span> <span class="n">1000</span>
+      <span class="k">headers:</span> <span class="n">2000</span>
+      <span class="k">body:</span> <span class="n">5000</span>
+
+  <span class="c"># Reports — más permisivo</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/reports"</span>
+    <span class="k">target:</span> <span class="s">"http://reports-service:8087"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">backendName:</span> <span class="s">"reports"</span>
+    <span class="k">timeout:</span>
+      <span class="k">connect:</span> <span class="n">3000</span>
+      <span class="k">headers:</span> <span class="n">5000</span>
+      <span class="k">body:</span> <span class="n">120000</span>     <span class="c"># 2 min para generación de PDFs</span></code></pre>
+
+  <h3>Ejemplo D — añadir una API externa (PokeAPI)</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/v2"</span>
+    <span class="k">target:</span> <span class="s">"https://pokeapi.co"</span>
+    <span class="k">stripPrefix:</span> <span class="b">false</span>
+    <span class="k">metricsLabel:</span> <span class="s">"pokeapi"</span>
+    <span class="k">backendName:</span> <span class="s">"pokeapi-ext"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">8</span>          <span class="c"># agresivo para evitar ban de la API pública</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span></code></pre>
+
+  <div class="callout callout-warn">
+    <div class="callout-title">Cambios estructurales requieren reinicio</div>
+    <p>
+      Modificar <code>prefix</code>, <code>target</code>, <code>stripPrefix</code>
+      o <code>timeout</code> requiere reinicio del proceso. Agregar o quitar
+      rutas también. Usa <code>SIGHUP</code> solo para
+      <code>rateLimit</code>, <code>cors</code>, <code>jwt</code>,
+      <code>overrides</code>, <code>corsOverrides</code>, <code>jwtOverrides</code>
+      y <code>logging.level</code>.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 8 — RATE LIMIT + OVERRIDES
+     ============================================================ -->
+<section id="cap-ratelimit" class="page-break">
+  <h1>8. Rate limiting y overrides</h1>
+
+  <p>
+    El rate limiter implementa una ventana fija por IP usando ioredis como
+    pipeline atómico. El motor es conservador en memoria y la latencia
+    añadida es despreciable (<1 ms p99 por request).
+  </p>
+
+  <h3>Esquema de <code>rateLimit</code></h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>maxRequests</code></td><td>int &gt; 0</td><td>Número máximo de requests dentro de la ventana</td></tr>
+      <tr><td><code>windowSeconds</code></td><td>int &gt; 0</td><td>Tamaño de la ventana en segundos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — por ruta</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api"</span>
+    <span class="k">target:</span> <span class="s">"http://backend:3000"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">1000</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>   <span class="c"># 1000 req/min por IP</span></code></pre>
+
+  <h3>Ejemplo B — límites diferenciados por sensibilidad</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/public"</span>
+    <span class="k">target:</span> <span class="s">"http://public-svc:8086"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">2000</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+
+  - <span class="k">prefix:</span> <span class="s">"/api/admin"</span>
+    <span class="k">target:</span> <span class="s">"http://admin-svc:8088"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">200</span>      <span class="c"># más estricto para endpoints administrativos</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+
+  - <span class="k">prefix:</span> <span class="s">"/api/health"</span>
+    <span class="k">target:</span> <span class="s">"http://health-svc:8087"</span>
+    <span class="c"># sin rateLimit — no se especifica, no se aplica</span></code></pre>
+
+  <h2>Overrides por path exacto</h2>
+
+  <p>
+    A veces una ruta entera es permisiva pero un endpoint concreto requiere
+    control estricto (ej: <code>/api/login</code> para evitar fuerza bruta).
+    Los <code>overrides</code> ganan sobre la política de la ruta y son
+    <strong>hot-reloadables</strong>.
+  </p>
+
+  <h3>Esquema de <code>overrides[]</code></h3>
+<pre><code><span class="k">overrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/login"</span>     <span class="c"># path exacto, debe empezar con /</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">5</span>       <span class="c"># 5 intentos por minuto por IP</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span></code></pre>
+
+  <h3>Ejemplo C — protección contra fuerza bruta de login</h3>
+<pre><code><span class="k">overrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/auth/login"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">5</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+
+  - <span class="k">path:</span> <span class="s">"/api/auth/2fa"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">3</span>
+      <span class="k">windowSeconds:</span> <span class="n">300</span>   <span class="c"># 3 intentos cada 5 minutos</span>
+
+  - <span class="k">path:</span> <span class="s">"/api/auth/register"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">10</span>
+      <span class="k">windowSeconds:</span> <span class="n">3600</span>  <span class="c"># 10 registros por hora</span></code></pre>
+
+  <h3>Ejemplo D — endpoint de búsqueda costoso</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api"</span>
+    <span class="k">target:</span> <span class="s">"http://backend:3000"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">1000</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+
+<span class="k">overrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/search"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">10</span>      <span class="c"># búsqueda es cara, bajamos a 10 por minuto</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span></code></pre>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Comportamiento al exceder el límite</div>
+    <p>
+      Cuando se alcanza <code>maxRequests</code> dentro de la ventana, el
+      gateway responde <code>429 Too Many Requests</code> con el siguiente
+      cuerpo:
+    </p>
+<pre><code>{
+  <span class="k">"statusCode"</span>: <span class="n">429</span>,
+  <span class="k">"error"</span>: <span class="s">"Too Many Requests"</span>,
+  <span class="k">"message"</span>: <span class="s">"Rate limit exceeded: 5 requests per 60 seconds"</span>,
+  <span class="k">"requestId"</span>: <span class="s">"3c4f-..."</span>
+}</code></pre>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 9 — CORS
+     ============================================================ -->
+<section id="cap-cors" class="page-break">
+  <h1>9. CORS</h1>
+
+  <p>
+    El plugin CORS se ejecuta <strong>primero</strong> en el pipeline, antes
+    de rate-limit, JWT y circuit breaker. Esto garantiza que los preflights
+    (OPTIONS con <code>Origin</code>) no consuman recursos compartidos y que
+    los preflights respondan incluso si el circuit breaker del backend está
+    abierto.
+  </p>
+
+  <h3>Precedencia (de mayor a menor)</h3>
+  <ol>
+    <li><code>corsOverrides[path=X]</code> — path exacto</li>
+    <li><code>routes[].cors</code> — prefijo de la ruta</li>
+    <li><code>cors</code> — global</li>
+    <li>CORS deshabilitado — si nada está definido</li>
+  </ol>
+
+  <h3>Esquema</h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Default</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td>boolean</td><td>false</td><td>Activa/desactiva CORS para el nivel</td></tr>
+      <tr><td><code>origins</code></td><td>string[]</td><td>[]</td><td>Lista de orígenes permitidos o <code>["*"]</code></td></tr>
+      <tr><td><code>methods</code></td><td>string[]</td><td>GET,POST,PUT,DELETE,PATCH,OPTIONS,HEAD</td><td>Métodos HTTP permitidos</td></tr>
+      <tr><td><code>allowedHeaders</code></td><td>string[]</td><td>[Content-Type,Authorization]</td><td>Cabeceras que el cliente puede enviar</td></tr>
+      <tr><td><code>exposedHeaders</code></td><td>string[]</td><td>[]</td><td>Cabeceras expuestas al JS del cliente (solo en respuestas reales)</td></tr>
+      <tr><td><code>credentials</code></td><td>boolean</td><td>false</td><td>Permite envío de credenciales (cookies, Authorization)</td></tr>
+      <tr><td><code>maxAge</code></td><td>int &gt; 0</td><td>86400</td><td>Tiempo de caché del preflight en segundos (24h)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Escenario 1 — Básico. Frontend público contra API interna</h2>
+
+  <div class="scenario-tag basic">Básico</div>
+
+<pre><code><span class="k">cors:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">origins:</span>
+    - <span class="s">"https://app.flashdrop.cl"</span>
+    - <span class="s">"https://admin.flashdrop.cl"</span>
+  <span class="k">methods:</span>
+    - <span class="t">GET</span>
+    - <span class="t">POST</span>
+    - <span class="t">PUT</span>
+    - <span class="t">DELETE</span>
+    - <span class="t">PATCH</span>
+    - <span class="t">OPTIONS</span>
+  <span class="k">allowedHeaders:</span>
+    - <span class="t">Content-Type</span>
+    - <span class="t">Authorization</span>
+    - <span class="t">X-Request-ID</span>
+  <span class="k">exposedHeaders:</span>
+    - <span class="t">X-Request-ID</span>
+    - <span class="t">X-RateLimit-Remaining</span>
+  <span class="k">credentials:</span> <span class="b">false</span>
+  <span class="k">maxAge:</span> <span class="n">86400</span></code></pre>
+
+  <p>Toda ruta hereda esta política global salvo override.</p>
+
+  <h2>Escenario 2 — Override por ruta. <code>/api/dev</code> abierto a cualquier origen</h2>
+
+  <div class="scenario-tag production">Producción</div>
+
+<pre><code><span class="k">routes:</span>
+  <span class="c"># Hereda CORS global</span>
+  - <span class="k">prefix:</span> <span class="s">"/api"</span>
+    <span class="k">target:</span> <span class="s">"http://backend:3000"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+
+  <span class="c"># Override SOLO para /api/dev — wildcard</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/dev"</span>
+    <span class="k">target:</span> <span class="s">"http://backend-dev:3000"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">cors:</span>
+      <span class="k">origins:</span>
+        - <span class="s">"*"</span>
+      <span class="k">methods:</span>
+        - <span class="s">"*"</span></code></pre>
+
+  <h2>Escenario 3 — Credenciales activas para una ruta de auth</h2>
+
+  <div class="scenario-tag production">Producción</div>
+
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/auth"</span>
+    <span class="k">target:</span> <span class="s">"http://auth-service:8082"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">cors:</span>
+      <span class="k">origins:</span>
+        - <span class="s">"https://app.flashdrop.cl"</span>
+      <span class="k">credentials:</span> <span class="b">true</span>
+      <span class="k">allowedHeaders:</span>
+        - <span class="t">Content-Type</span>
+        - <span class="t">Authorization</span>
+        - <span class="t">Cookie</span></code></pre>
+
+  <h2>Escenario 4 — Override por path exacto. Login completamente abierto</h2>
+
+  <div class="scenario-tag advanced">Avanzado</div>
+
+<pre><code><span class="c"># corsOverrides tiene prioridad máxima</span>
+<span class="k">corsOverrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/auth/login"</span>
+    <span class="k">cors:</span>
+      <span class="k">origins:</span>
+        - <span class="s">"*"</span>
+      <span class="k">credentials:</span> <span class="b">false</span></code></pre>
+
+  <h2>Escenario 5 — Deshabilitar CORS para una ruta interna</h2>
+
+  <div class="scenario-tag advanced">Avanzado</div>
+
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/internal"</span>
+    <span class="k">target:</span> <span class="s">"http://internal-service:9000"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">cors:</span>
+      <span class="k">enabled:</span> <span class="b">false</span></code></pre>
+
+  <h3>Validación al startup (fall-fast)</h3>
+  <p>Las siguientes combinaciones se rechazan al arrancar con mensaje claro:</p>
+  <table>
+    <thead>
+      <tr><th>Combinación</th><th>Error</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>enabled: true</code> con <code>origins: []</code></td><td><em>cors: enabled=true requires at least one origin</em></td></tr>
+      <tr><td><code>credentials: true</code> con <code>origins: ["*"]</code></td><td><em>cors: cannot use credentials=true with wildcard origin "*"</em></td></tr>
+      <tr><td><code>credentials: true</code> con <code>allowedHeaders: ["*"]</code></td><td><em>cors: cannot use allowedHeaders=["*"] with credentials=true</em></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Preflight corto-circuito</div>
+    <p>
+      Un <code>OPTIONS</code> con cabecera <code>Origin</code> permitido se
+      responde directamente con <code>204 No Content</code> y los headers CORS
+      correspondientes. El backend no recibe la request.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 10 — JWT
+     ============================================================ -->
+<section id="cap-jwt" class="page-break">
+  <h1>10. Autenticación JWT</h1>
+
+  <p>
+    El gateway soporta dos modos de validación JWT que pueden coexistir en
+    distintas rutas. Si una ruta no incluye el bloque <code>jwt</code>, es
+    pública (no se valida ningún token).
+  </p>
+
+  <h3>Dos modos</h3>
+  <table>
+    <thead>
+      <tr><th>Modo</th><th>Algoritmos</th><th>Cuándo usarlo</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>shared-secret</strong></td>
+        <td>HS256, HS384, HS512</td>
+        <td>
+          Compatibilidad hacia atrás, integraciones internas, baja rotación de
+          claves. Cada ruta lleva su propio <code>secret</code>. No requiere
+          sección global <code>jwt</code>.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>jwks</strong></td>
+        <td>RS256</td>
+        <td>
+          Producción. Las claves privadas quedan en el Auth Service, el gateway
+          descubre las públicas vía JWKS endpoint (RFC 7517) y rota
+          automáticamente. Soporta múltiples issuers.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Precedencia</h3>
+  <ol>
+    <li><code>jwtOverrides[path=X]</code> — path exacto</li>
+    <li><code>routes[].jwt</code> — por ruta</li>
+    <li><code>jwt</code> (global) — usado por rutas JWKS</li>
+  </ol>
+
+  <h2>Modo 1 · shared-secret (HS256)</h2>
+
+  <div class="scenario-tag basic">Básico</div>
+
+  <p>Cada ruta declara su secreto y algoritmo localmente.</p>
+
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/protected"</span>
+    <span class="k">target:</span> <span class="s">"http://backend:3000"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">jwt:</span>
+      <span class="k">enabled:</span> <span class="b">true</span>
+      <span class="k">secret:</span> <span class="s">"${JWT_SECRET}"</span>
+      <span class="k">algorithm:</span> <span class="s">"HS256"</span>
+      <span class="k">issuer:</span> <span class="s">"flashdrop-api"</span>          <span class="c"># claim iss esperado</span>
+      <span class="k">audience:</span> <span class="s">"flashdrop-api"</span>        <span class="c"># claim aud esperado</span>
+      <span class="k">forwardClaims:</span>
+        - <span class="t">sub</span>
+        - <span class="t">role</span>
+        - <span class="t">email</span></code></pre>
+
+  <p>
+    Los <code>forwardClaims</code> se reenvían al backend en cabeceras
+    <code>x-jwt-claim-&lt;nombre&gt;</code>, útil para que el servicio
+    downstream sepa quién es el usuario sin re-validar el token.
+  </p>
+
+  <h3>Ruta explícitamente pública dentro de un bloque protegido</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/auth/login"</span>
+    <span class="k">target:</span> <span class="s">"http://auth:8082"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">jwt:</span>
+      <span class="k">enabled:</span> <span class="b">false</span>           <span class="c"># login no requiere token</span></code></pre>
+
+  <h2>Modo 2 · JWKS (RS256 contra Auth Service)</h2>
+
+  <div class="scenario-tag production">Producción</div>
+
+  <p>
+    Declara los issuers una sola vez en la sección global <code>jwt</code>; las
+    rutas referencian por nombre. <code>issuer: any</code> acepta tokens de
+    cualquiera de los issuers registrados (mapeo por <code>iss</code> claim).
+  </p>
+
+  <h3>Esquema de <code>jwt.issuers[]</code></h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Default</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>name</code></td><td>string</td><td>—</td><td>Identificador único del issuer</td></tr>
+      <tr><td><code>jwksUri</code></td><td>URL https</td><td>—</td><td>Endpoint que sirve JWKS (RFC 7517)</td></tr>
+      <tr><td><code>issuer</code></td><td>string</td><td>—</td><td>Valor esperado del claim <code>iss</code></td></tr>
+      <tr><td><code>audience</code></td><td>string</td><td>opcional</td><td>Valor esperado del claim <code>aud</code></td></tr>
+      <tr><td><code>cacheTtlSeconds</code></td><td>int</td><td>3600</td><td>Tiempo de vida de la caché en segundos</td></tr>
+      <tr><td><code>staleGracePeriodSeconds</code></td><td>int</td><td>1800</td><td>Ventana de gracia post-TTL donde se sigue sirviendo caché si falla el refresh</td></tr>
+      <tr><td><code>refreshCooldownSeconds</code></td><td>int</td><td>30</td><td>Mínimo entre refreshes síncronos</td></tr>
+      <tr><td><code>refreshOnMiss</code></td><td>boolean</td><td>true</td><td>Si un <code>kid</code> desconocido dispara refresh síncrono</td></tr>
+      <tr><td><code>timeoutMs</code></td><td>int</td><td>3000</td><td>Timeout HTTP al endpoint JWKS</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — issuer único en producción</h3>
+<pre><code><span class="k">jwt:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">mode:</span> <span class="s">"jwks"</span>
+  <span class="k">issuers:</span>
+    - <span class="k">name:</span> <span class="s">"auth-service-prod"</span>
+      <span class="k">jwksUri:</span> <span class="s">"https://auth.flashdrop.cl/.well-known/jwks.json"</span>
+      <span class="k">issuer:</span> <span class="s">"https://auth.flashdrop.cl"</span>
+      <span class="k">audience:</span> <span class="s">"flashdrop-api"</span>
+
+<span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/orders"</span>
+    <span class="k">target:</span> <span class="s">"http://orders-service:8084"</span>
+    <span class="k">jwt:</span>
+      <span class="k">issuer:</span> <span class="s">"auth-service-prod"</span>   <span class="c"># referencia por nombre</span></code></pre>
+
+  <h3>Ejemplo B — multi-tenant con dos issuers</h3>
+<pre><code><span class="k">jwt:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">mode:</span> <span class="s">"jwks"</span>
+  <span class="k">issuers:</span>
+    - <span class="k">name:</span> <span class="s">"tenant-a"</span>
+      <span class="k">jwksUri:</span> <span class="s">"https://auth.tenant-a.com/.well-known/jwks.json"</span>
+      <span class="k">issuer:</span> <span class="s">"https://auth.tenant-a.com"</span>
+    - <span class="k">name:</span> <span class="s">"tenant-b"</span>
+      <span class="k">jwksUri:</span> <span class="s">"https://auth.tenant-b.com/.well-known/jwks.json"</span>
+      <span class="k">issuer:</span> <span class="s">"https://auth.tenant-b.com"</span>
+
+<span class="k">routes:</span>
+  <span class="c"># Ruta de tenant-a: solo tokens de su issuer</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/tenant-a"</span>
+    <span class="k">target:</span> <span class="s">"http://tenant-a-api:8084"</span>
+    <span class="k">jwt:</span>
+      <span class="k">issuer:</span> <span class="s">"tenant-a"</span>
+
+  <span class="c"># Ruta mixta: acepta tokens de cualquier issuer registrado</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/public"</span>
+    <span class="k">target:</span> <span class="s">"http://public-svc:8086"</span>
+    <span class="k">jwt:</span>
+      <span class="k">issuer:</span> <span class="s">"any"</span></code></pre>
+
+  <h3>Ejemplo C — cache corta para staging con rotación frecuente</h3>
+<pre><code><span class="k">jwt:</span>
+  <span class="k">mode:</span> <span class="s">"jwks"</span>
+  <span class="k">issuers:</span>
+    - <span class="k">name:</span> <span class="s">"auth-staging"</span>
+      <span class="k">jwksUri:</span> <span class="s">"https://auth-staging.flashdrop.cl/.well-known/jwks.json"</span>
+      <span class="k">issuer:</span> <span class="s">"https://auth-staging.flashdrop.cl"</span>
+      <span class="k">cacheTtlSeconds:</span> <span class="n">600</span>           <span class="c"># 10 minutos — rotación más agresiva</span>
+      <span class="k">staleGracePeriodSeconds:</span> <span class="n">300</span>   <span class="c"># 5 min de gracia</span></code></pre>
+
+  <h2>Códigos de error</h2>
+  <table>
+    <thead>
+      <tr><th>Código</th><th>Cuándo</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>401 Unauthorized</code></td>
+        <td>Token ausente, firma inválida, expirado, claims incorrectos,
+        <code>kid</code> desconocido, <code>iss</code>/<code>aud</code> no
+        coinciden</td></tr>
+      <tr><td><code>503 Service Unavailable</code></td>
+        <td>El endpoint JWKS no responde más allá de
+        <code>staleGracePeriodSeconds</code> y no hay claves en caché</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Métricas Prometheus disponibles</h3>
+  <table>
+    <thead>
+      <tr><th>Métrica</th><th>Tipo</th><th>Labels</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>gateway_jwt_validations_total</code></td>
+        <td>Counter</td>
+        <td><code>result</code></td>
+        <td>
+          <code>ok</code>, <code>missing_token</code>, <code>unknown_kid</code>,
+          <code>missing_kid</code>, <code>expired</code>,
+          <code>invalid_issuer</code>, <code>invalid_audience</code>,
+          <code>invalid_claims</code>, <code>invalid_signature</code>,
+          <code>service_unavailable</code>
+        </td>
+      </tr>
+      <tr>
+        <td><code>gateway_jwks_refresh_total</code></td>
+        <td>Counter</td>
+        <td><code>result</code></td>
+        <td><code>ok</code>, <code>error</code>, <code>cooldown</code></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================
+     CAP 11 — CIRCUIT BREAKER
+     ============================================================ -->
+<section id="cap-cb" class="page-break">
+  <h1>11. Circuit breaker y reintentos</h1>
+
+  <p>
+    El circuit breaker protege cada backend de sobrecargas aislando fallas en
+    cascada. Cuando un upstream acumula errores, deja de recibir tráfico
+    durante un tiempo de recuperación, prueba con un subconjunto y, si va
+    bien, vuelve a la operación normal.
+  </p>
+
+  <h3>Diagrama de estados</h3>
+<pre><code>
+       N errores            ──────────────►   OPEN  (bloquea requests)
+  ┌───────────────┐                              │
+  │    CLOSED     │                              │ timeout
+  │   (normal)    │                              ▼
+  └───────┬───────┘                       ┌───────────────┐
+          ▲                               │   HALF_OPEN   │
+          │ todas las requests en        │   (testing)   │
+          │ HALF_OPEN succeeded           └───────┬───────┘
+          └──────────────────────────────────────┘
+</code></pre>
+
+  <h3>Esquema de <code>circuitBreaker</code></h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Default</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td>boolean</td><td>true</td><td>Activa/desactiva el circuit breaker</td></tr>
+      <tr><td><code>errorThreshold</code></td><td>1–100</td><td>50</td><td>% de errores en la ventana para abrir</td></tr>
+      <tr><td><code>requestCount</code></td><td>int &gt; 0</td><td>100</td><td>Tamaño de la ventana de requests</td></tr>
+      <tr><td><code>recoveryTimeMs</code></td><td>int &gt; 0</td><td>30000</td><td>Tiempo en OPEN antes de pasar a HALF_OPEN</td></tr>
+      <tr><td><code>halfOpenRequests</code></td><td>int &gt; 0</td><td>3</td><td>Requests exitosas requeridas en HALF_OPEN para volver a CLOSED</td></tr>
+      <tr><td><code>maxRetries</code></td><td>int ≥ 0</td><td>3</td><td>Reintentos por request antes de propagar el error</td></tr>
+      <tr><td><code>retryDelayMs</code></td><td>int &gt; 0</td><td>100</td><td>Base para el cálculo de backoff exponencial</td></tr>
+      <tr><td><code>retryMaxDelayMs</code></td><td>int &gt; 0</td><td>5000</td><td>Tope máximo del delay por reintento</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — circuit breaker ajustado para backend transaccional</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/orders"</span>
+    <span class="k">target:</span> <span class="s">"http://orders-backend:8080"</span>
+    <span class="k">circuitBreaker:</span>
+      <span class="k">enabled:</span> <span class="b">true</span>
+      <span class="k">errorThreshold:</span> <span class="n">30</span>           <span class="c"># 30% es suficiente para abrir</span>
+      <span class="k">requestCount:</span> <span class="n">50</span>
+      <span class="k">recoveryTimeMs:</span> <span class="n">60000</span>        <span class="c"># 1 minuto antes de reintentar</span>
+      <span class="k">halfOpenRequests:</span> <span class="n">5</span>
+      <span class="k">maxRetries:</span> <span class="n">2</span>
+      <span class="k">retryDelayMs:</span> <span class="n">200</span>
+      <span class="k">retryMaxDelayMs:</span> <span class="n">10000</span></code></pre>
+
+  <h3>Ejemplo B — circuit breaker permisivo para contenido estático</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/public"</span>
+    <span class="k">target:</span> <span class="s">"http://public-backend:8080"</span>
+    <span class="k">circuitBreaker:</span>
+      <span class="k">enabled:</span> <span class="b">true</span>
+      <span class="k">errorThreshold:</span> <span class="n">70</span>           <span class="c"># tolera más errores antes de aislar</span>
+      <span class="k">requestCount:</span> <span class="n">200</span>
+      <span class="k">recoveryTimeMs:</span> <span class="n">15000</span>        <span class="c"># recuperación rápida</span></code></pre>
+
+  <h3>Ejemplo C — deshabilitado para una ruta interna</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/internal/jobs"</span>
+    <span class="k">target:</span> <span class="s">"http://internal-svc:9000"</span>
+    <span class="k">circuitBreaker:</span>
+      <span class="k">enabled:</span> <span class="b">false</span></code></pre>
+
+  <h2>Reintentos (retries)</h2>
+  <p>
+    Los reintentos usan exponential backoff con full jitter para evitar
+    "thundering herd" cuando un backend se recupera. El cálculo del delay es:
+  </p>
+
+<pre><code><span class="c">// attempt = número de reintento (0 = primer reintento)</span>
+delay = min(retryDelayMs * 2^attempt, retryMaxDelayMs)
+jitter = random(0, delay)
+delay_real = jitter</code></pre>
+
+  <h3>Métodos que se reintentan</h3>
+  <p>
+    Por seguridad, solo se reintentan métodos idempotentes. La lista es
+    <strong>configurable por ruta</strong> mediante <code>retryableMethods</code>.
+  </p>
+
+  <table class="def-table">
+    <thead>
+      <tr><th>Método</th><th>¿Por defecto?</th><th>Razón</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>GET</td><td>sí</td><td>Idempotente por definición</td></tr>
+      <tr><td>HEAD</td><td>sí</td><td>Igual a GET sin body</td></tr>
+      <tr><td>OPTIONS</td><td>sí</td><td>Sin side-effects</td></tr>
+      <tr><td>PUT</td><td>sí</td><td>Idempotente cuando el backend garantiza reemplazo total</td></tr>
+      <tr><td>DELETE</td><td>sí</td><td>Idempotente: borrar 2 veces = borrar 1 vez</td></tr>
+      <tr><td>POST</td><td><strong>no</strong></td><td>Suele crear recursos; reintentar duplica</td></tr>
+      <tr><td>PATCH</td><td><strong>no</strong></td><td>Aplica cambios incrementales</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo — habilitar retry para POST con idempotency-key</h3>
+<pre><code><span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/payments"</span>
+    <span class="k">target:</span> <span class="s">"http://payments:8089"</span>
+    <span class="k">circuitBreaker:</span>
+      <span class="k">enabled:</span> <span class="b">true</span>
+      <span class="k">maxRetries:</span> <span class="n">3</span>
+    <span class="k">retryableMethods:</span>
+      - <span class="t">POST</span>
+      - <span class="t">GET</span>
+      - <span class="t">PUT</span>
+      - <span class="t">DELETE</span>
+      <span class="c"># Solo si tu backend implementa idempotency-key (e.g. cabecera Idempotency-Key)</span></code></pre>
+
+  <h3>Errores elegibles para retry</h3>
+  <ul>
+    <li><strong>Red</strong>: <code>ECONNREFUSED</code>, <code>ETIMEDOUT</code>,
+      <code>ECONNRESET</code>, <code>ENOTFOUND</code>, <code>EPIPE</code></li>
+    <li><strong>HTTP 5xx</strong>: 500, 502, 503, 504</li>
+  </ul>
+  <p>Los 4xx no se reintentan — son errores del cliente, no del backend.</p>
+
+  <div class="callout callout-danger">
+    <div class="callout-title">Nunca se reintenta con circuit abierto</div>
+    <p>
+      Si el circuit breaker está en estado OPEN, la request responde
+      inmediatamente con <code>503</code> y nunca se reintenta.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 12 — METRICS
+     ============================================================ -->
+<section id="cap-metrics" class="page-break">
+  <h1>12. Métricas Prometheus</h1>
+
+  <p>
+    El gateway expone un endpoint <code>GET /metrics</code> en formato
+    Prometheus, incluyendo las métricas por defecto de Node.js y todas las
+    internas del pipeline. Es consumido por Prometheus, Grafana y Dozzle.
+  </p>
+
+  <h3>Esquema de <code>metrics</code></h3>
+  <table class="def-table">
+    <thead>
+      <tr><th>Campo</th><th>Tipo</th><th>Default</th><th>Descripción</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td>boolean</td><td>true</td><td>Activa el endpoint</td></tr>
+      <tr><td><code>path</code></td><td>string</td><td><code>/metrics</code></td><td>Path del endpoint</td></tr>
+      <tr><td><code>defaultLabels</code></td><td>map string</td><td>{}</td><td>Labels aplicados a todas las métricas</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Ejemplo A — etiquetar el entorno</h3>
+<pre><code><span class="k">metrics:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">path:</span> <span class="s">"/metrics"</span>
+  <span class="k">defaultLabels:</span>
+    <span class="k">environment:</span> <span class="s">"production"</span>
+    <span class="k">service:</span> <span class="s">"gateway"</span>
+    <span class="k">region:</span> <span class="s">"us-east-1"</span></code></pre>
+
+  <h3>Métricas expuestas</h3>
+  <table>
+    <thead>
+      <tr><th>Familia</th><th>Métrica</th><th>Labels</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="3"><strong>HTTP general</strong></td>
+        <td><code>gateway_http_requests_total</code></td>
+        <td><code>route, backend, status_code</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_http_request_duration_seconds</code></td>
+        <td><code>route, backend</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_http_requests_in_flight</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td rowspan="3"><strong>Rate limit</strong></td>
+        <td><code>gateway_rate_limit_decisions_total</code></td>
+        <td><code>route, decision</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_rate_limit_redis_errors_total</code></td>
+        <td><code>route</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_rate_limit_window_seconds</code></td>
+        <td><code>route</code></td>
+      </tr>
+      <tr>
+        <td rowspan="5"><strong>Circuit breaker</strong></td>
+        <td><code>gateway_circuit_breaker_state</code></td>
+        <td><code>route, backend</code> (0=CLOSED, 1=HALF_OPEN, 2=OPEN)</td>
+      </tr>
+      <tr>
+        <td><code>gateway_circuit_breaker_failures_total</code></td>
+        <td><code>route, backend</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_circuit_breaker_requests_total</code></td>
+        <td><code>route, backend, status</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_circuit_breaker_transitions_total</code></td>
+        <td><code>route, backend, from_state, to_state</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_circuit_breaker_open_total</code></td>
+        <td><code>route, backend</code></td>
+      </tr>
+      <tr>
+        <td rowspan="2"><strong>Retries</strong></td>
+        <td><code>gateway_retries_total</code></td>
+        <td><code>route, backend, error_code</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_retry_success_total</code></td>
+        <td><code>route, backend</code></td>
+      </tr>
+      <tr>
+        <td>CORS</td>
+        <td><code>gateway_cors_requests_total</code></td>
+        <td><code>decision</code> (allowed/blocked/preflight/no_origin)</td>
+      </tr>
+      <tr>
+        <td rowspan="2">JWT</td>
+        <td><code>gateway_jwt_validations_total</code></td>
+        <td><code>result</code></td>
+      </tr>
+      <tr>
+        <td><code>gateway_jwks_refresh_total</code></td>
+        <td><code>result</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Consultas PromQL de ejemplo</h3>
+<pre><code><span class="c"># Tasa de error 5xx por backend (últimos 5 min)</span>
+sum by (backend) (
+  rate(gateway_http_requests_total{status_code=~"5.."}[5m])
+)
+
+<span class="c"># Porcentaje de preflights permitidos</span>
+sum(rate(gateway_cors_requests_total{decision="preflight"}[5m]))
+/
+sum(rate(gateway_cors_requests_total[5m])) * 100
+
+<span class="c"># Auth Service caído (errores 503)</span>
+rate(gateway_jwt_validations_total{result="service_unavailable"}[5m])
+
+<span class="c"># Latencia p95 por ruta</span>
+histogram_quantile(0.95,
+  sum by (route, le) (
+    rate(gateway_http_request_duration_seconds_bucket[5m])
+  )
+)
+
+<span class="c"># Circuits actualmente abiertos</span>
+gateway_circuit_breaker_state == 2</code></pre>
+</section>
+
+<!-- ============================================================
+     CAP 13 — HOT RELOAD
+     ============================================================ -->
+<section id="cap-hotreload" class="page-break">
+  <h1>13. Hot reload (SIGHUP)</h1>
+
+  <p>
+    El gateway puede recargar la configuración sin reiniciar el proceso
+    enviando la señal <code>SIGHUP</code>. La actualización es atómica
+    (swap de <code>ConfigSnapshot</code>) y los requests en vuelo terminan
+    con la configuración anterior.
+  </p>
+
+  <h3>¿Cómo dispararlo?</h3>
+<pre><code><span class="c"># En un contenedor Docker</span>
+docker kill -s SIGHUP gateway-service
+
+<span class="c"># En un proceso local con PID conocido</span>
+kill -s SIGHUP <span class="n">$(pgrep -f gateway-http)</span>
+
+<span class="c"># Desde systemd (si tienes un unit)</span>
+systemctl reload gateway</code></pre>
+
+  <h3>¿Qué se puede recargar en caliente?</h3>
+  <table>
+    <thead>
+      <tr><th>Sección</th><th>¿Hot reload?</th><th>Comentario</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>routes[].rateLimit</code></td><td>✓ sí</td><td>Aplica en el siguiente request</td></tr>
+      <tr><td><code>routes[].jwt</code></td><td>✓ sí</td><td>El registry de JWKS se reconstruye</td></tr>
+      <tr><td><code>routes[].cors</code></td><td>✓ sí</td><td>Calcula nuevo <code>effectiveCors</code></td></tr>
+      <tr><td><code>overrides[]</code></td><td>✓ sí</td><td>Cambio inmediato</td></tr>
+      <tr><td><code>cors</code> + <code>corsOverrides[]</code></td><td>✓ sí</td><td>Igual que por ruta</td></tr>
+      <tr><td><code>jwt</code> + <code>jwtOverrides[]</code></td><td>✓ sí</td><td>Registry se reconstruye con cooldown</td></tr>
+      <tr><td><code>logging.level</code></td><td>✓ sí</td><td>Cambio dinámico vía Pino</td></tr>
+      <tr><td><code>server.port</code> / <code>server.host</code></td><td>✗ no</td><td>Requiere reinicio (re-bind TCP)</td></tr>
+      <tr><td><code>redis.url</code></td><td>✗ no</td><td>Conexión Redis persiste</td></tr>
+      <tr><td><code>routes[].prefix</code> / <code>target</code> / <code>stripPrefix</code></td><td>✗ no</td><td>Cambio estructural</td></tr>
+      <tr><td>Añadir/quitar rutas</td><td>✗ no</td><td>Cambio estructural</td></tr>
+      <tr><td><code>health.enabled</code></td><td>✗ no</td><td>Registrado al startup</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Comportamiento ante cambio no recargable</h3>
+  <p>
+    Si modificas <code>server.port</code> y envías SIGHUP, el gateway:
+  </p>
+  <ol>
+    <li>Detecta el cambio no recargable.</li>
+    <li>Lo registra como <code>warn</code> y lo ignora.</li>
+    <li>Continúa aplicando el resto de cambios válidos.</li>
+    <li>Devuelve en el log algo como:
+      <code>config: reload partial — ignored non-reloadable: server.port</code></li>
+  </ol>
+
+  <h3>Validación y rollback</h3>
+  <p>Si la nueva configuración falla validación Zod:</p>
+  <ol>
+    <li>El reload se descarta por completo.</li>
+    <li>El snapshot anterior se mantiene (rollback automático).</li>
+    <li>Se registra como <code>error</code> con detalle de los issues.</li>
+  </ol>
+
+  <h3>Protección contra señales concurrentes</h3>
+  <p>
+    Un SIGHUP mientras hay un reload en curso se ignora silenciosamente y se
+    loguea como <code>warn</code>. No hay riesgo de race condition ni de
+    double-swap de snapshots.
+  </p>
+
+  <h3>Ejemplo de flujo de cambio en producción</h3>
+  <ol>
+    <li>
+      Editas <code>config/gateway.yaml</code> y subes el límite de
+      <code>/api/login</code> de 5 a 20 req/min.
+    </li>
+    <li>
+      Mueves el archivo al volumen del contenedor
+      (<code>docker cp</code>, sync, mount NFS).
+    </li>
+    <li>
+      <code>docker kill -s SIGHUP gateway-service</code>.
+    </li>
+    <li>
+      En <code>stdout</code> ves:
+      <code>config: reloaded successfully (overrides: 1 path updated)</code>.
+    </li>
+    <li>
+      Desde el siguiente request, el nuevo límite está en vigor.
+    </li>
+  </ol>
+
+  <div class="callout callout-info">
+    <div class="callout-title">Sobre Windows</div>
+    <p>
+      <code>SIGHUP</code> no se entrega de forma nativa en Windows. En entornos
+      Windows el hot reload solo funciona dentro de WSL, Git Bash o
+      contenedores Docker que lo traduzcan a la señal POSIX correcta.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     CAP 14 — DOCKER
+     ============================================================ -->
+<section id="cap-docker" class="page-break">
+  <h1>14. Despliegue con Docker</h1>
+
+  <p>
+    El repositorio incluye un Dockerfile optimizado (multi-stage build) y un
+    docker-compose de ejemplo con todo el stack de observabilidad: Redis,
+    backend mock, Dozzle para logs en vivo, Prometheus y Grafana con un
+    dashboard preinstalado.
+  </p>
+
+  <h3>Build de la imagen</h3>
+<pre><code><span class="c"># Usando el script de npm</span>
+pnpm docker:build
+
+<span class="c"># Equivalente manual</span>
+docker build -f docker/Dockerfile -t gateway-http:latest .</code></pre>
+
+  <h3>Levantar el stack completo</h3>
+<pre><code>docker compose -f docker/docker-compose.example.yml up --build</code></pre>
+
+  <h3>Componentes del stack</h3>
+  <table>
+    <thead>
+      <tr><th>Servicio</th><th>Puerto local</th><th>Propósito</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>gateway</td><td>3000</td><td>El Gateway HTTP Modular</td></tr>
+      <tr><td>redis-cache</td><td>—</td><td>Redis como backend de rate-limit</td></tr>
+      <tr><td>mock-backend</td><td>—</td><td>Backend Node de prueba para requests de ejemplo</td></tr>
+      <tr><td>dozzle</td><td>9999</td><td>Visor de logs en tiempo real</td></tr>
+      <tr><td>prometheus</td><td>9090</td><td>Scraper de métricas</td></tr>
+      <tr><td>grafana</td><td>3001</td><td>Dashboard "Gateway Overview" pre-cargado</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Hot reload en un contenedor</h3>
+<pre><code>docker kill -s SIGHUP gateway-service</code></pre>
+
+  <h3>Ejemplo mínimo de <code>docker-compose.yml</code> de producción</h3>
+<pre><code><span class="k">services:</span>
+  <span class="k">gateway:</span>
+    <span class="k">image:</span> <span class="s">gateway-http:latest</span>
+    <span class="k">ports:</span>
+      - <span class="s">"3000:3000"</span>
+    <span class="k">environment:</span>
+      <span class="k">CONFIG_PATH:</span> <span class="s">/app/config/gateway.yaml</span>
+      <span class="k">REDIS_URL:</span> <span class="s">redis://redis:6379</span>
+      <span class="k">NODE_ENV:</span> <span class="s">production</span>
+    <span class="k">volumes:</span>
+      - <span class="s">./config/gateway.yaml:/app/config/gateway.yaml:ro</span>
+    <span class="k">depends_on:</span>
+      <span class="k">redis:</span>
+        <span class="k">condition:</span> <span class="s">service_healthy</span>
+    <span class="k">restart:</span> <span class="s">unless-stopped</span>
+
+  <span class="k">redis:</span>
+    <span class="k">image:</span> <span class="s">redis:7-alpine</span>
+    <span class="k">healthcheck:</span>
+      <span class="k">test:</span> [<span class="s">"CMD"</span>, <span class="s">"redis-cli"</span>, <span class="s">"ping"</span>]
+      <span class="k">interval:</span> <span class="n">5s</span>
+      <span class="k">timeout:</span> <span class="n">3s</span>
+      <span class="k">retries:</span> <span class="n">3</span></code></pre>
+
+  <h3>Verificación rápida</h3>
+<pre><code><span class="c"># Health del gateway</span>
+curl -s http://localhost:3000/health | jq
+
+<span class="c"># Métricas Prometheus — primeras 20 líneas</span>
+curl -s http://localhost:3000/metrics | head -20
+
+<span class="c"># Logs en vivo: abrir http://localhost:9999 en el navegador</span></code></pre>
+</section>
+
+<!-- ============================================================
+     CAP 15 — TROUBLESHOOT
+     ============================================================ -->
+<section id="cap-troubleshoot" class="page-break">
+  <h1>15. Solución de problemas</h1>
+
+  <h3>15.1 — El proceso no arranca y dice <em>"REDIS_URL is undefined"</em></h3>
+  <p>Causa: falta la variable de entorno <code>REDIS_URL</code> en el shell
+  o en el bloque <code>environment</code> de Docker.</p>
+  <p><strong>Solución:</strong></p>
+<pre><code><span class="c"># Linux/macOS</span>
+export REDIS_URL=<span class="s">"redis://localhost:6379"</span>
+
+<span class="c"># PowerShell</span>
+$env:REDIS_URL = <span class="s">"redis://localhost:6379"</span></code></pre>
+
+  <h3>15.2 — <em>"cors: cannot use credentials=true with wildcard origin"</em></h3>
+  <p>Causa: el plugin CORS rechaza la combinación
+  <code>credentials: true</code> + <code>origins: ["*"]</code> por estándar
+  Fetch.</p>
+  <p><strong>Solución:</strong> enumerar orígenes específicos o dejar
+  <code>credentials: false</code>.</p>
+
+  <h3>15.3 — Circuit breaker constantemente abierto</h3>
+  <p>Síntoma: <code>gateway_circuit_breaker_state == 2</code> y muchas requests
+  devuelven 503.</p>
+  <p><strong>Pasos:</strong></p>
+  <ol>
+    <li>Revisar <code>gateway_http_requests_total</code> filtrado por status 5xx.</li>
+    <li>Comprobar que el backend upstream está saludable
+      (<code>curl &lt;target&gt;/health</code> directo).</li>
+    <li>Revisar <code>recoveryTimeMs</code>; si es muy largo el backend tendrá
+      más tiempo para recuperarse del estado OPEN.</li>
+    <li>Bajar <code>errorThreshold</code> temporalmente puede ser
+      contraproducente — el problema suele ser que el threshold ya es muy
+      sensible y se abre con tráfico legítimo.</li>
+  </ol>
+
+  <h3>15.4 — Las métricas no aparecen en Grafana</h3>
+  <p>Pasos:</p>
+  <ol>
+    <li>Confirmar que Prometheus hace scraping: abrir
+      <code>http://localhost:9090/targets</code>.</li>
+    <li>Verificar que Grafana tiene configurado el data source apuntando a
+      Prometheus.</li>
+    <li>Si usas <code>metrics.defaultLabels</code>, recordar que cambian el
+      conjunto de series — los dashboards provisionados pueden necesitar
+      actualización.</li>
+  </ol>
+
+  <h3>15.5 — <em>"jwt: unknown kid"</em> tras rotar claves en el Auth Service</h3>
+  <p>Causa: el <code>cacheTtlSeconds</code> aún no expiró y la clave nueva no
+  está en caché.</p>
+  <p><strong>Solución:</strong></p>
+  <ul>
+    <li>Verificar que <code>refreshOnMiss: true</code> en el issuer
+      correspondiente.</li>
+    <li>Reducir <code>cacheTtlSeconds</code> para que el refresh ocurra más
+      seguido.</li>
+    <li>Esperar <code>refreshCooldownSeconds</code> para evitar rate-limit
+      por el cooldown y revisar los logs <code>gateway_jwks_refresh_total</code>.</li>
+  </ul>
+
+  <h3>15.6 — Hot reload no aplica cambios</h3>
+  <p>Posibles causas:</p>
+  <ul>
+    <li>Estás modificando un campo <strong>no recargable</strong>
+      (ver tabla en <a href="#cap-hotreload">cap. 13</a>).</li>
+    <li>El archivo YAML está mal formado y la validación Zod falla — revisa
+      los logs buscando <code>config: reload failed</code>.</li>
+    <li>El contenedor Docker no tiene el volumen montado en
+      <code>:ro</code> legible para el proceso.</li>
+    <li>La señal <code>SIGHUP</code> no llegó porque el contenedor está
+      usando PID 1 sin <code>tini</code> o <code>dumb-init</code>.</li>
+  </ul>
+
+  <h3>15.7 — Muchas requests devuelven 429</h3>
+  <p>Pasos:</p>
+  <ol>
+    <li>Inspeccionar <code>gateway_rate_limit_decisions_total</code>
+      filtrado por <code>decision="blocked"</code>.</li>
+    <li>Ajustar <code>maxRequests</code> o <code>windowSeconds</code>
+      en el override correspondiente.</li>
+    <li>Confirmar que detrás del gateway no haya un NAT corporativo que
+      concentre muchas IPs reales en una sola.</li>
+  </ol>
+
+  <h3>15.8 — <em>"MissingEnvVarError"</em> en el log</h3>
+  <p>Causa: una variable <code>${...}</code> en <code>gateway.yaml</code> no
+  existe en el entorno del proceso.</p>
+  <p><strong>Solución:</strong> añadir la variable al
+  <code>.env</code> del despliegue, al <code>environment</code> del
+  Dockerfile, o directamente como <code>env</code> en el manifiesto de
+  Kubernetes.</p>
+
+  <h3>15.9 — Health aggregation devuelve 503 aunque los servicios están OK</h3>
+  <ul>
+    <li>Verificar que <code>backendPath</code> declarado en
+      <code>health.backendPath</code> exista en cada microservicio.</li>
+    <li>Si los servicios están en otro namespace de DNS, agregar el
+      FQDN en <code>target</code> (ej:
+      <code>http://auth-service.default.svc.cluster.local:8082</code>).</li>
+    <li>Subir <code>timeoutMs</code> si el primer hit causa cold start
+      (JVM, Node con lazy require, etc.).</li>
+  </ul>
+</section>
+
+<!-- ============================================================
+     CAP 16 — ANEXO
+     ============================================================ -->
+<section id="cap-anexo" class="page-break">
+  <h1>Anexo: hoja de referencia rápida</h1>
+
+  <h3>Esqueleto completo</h3>
+<pre><code><span class="k">server:</span>
+  <span class="k">port:</span> <span class="n">${PORT}</span>
+  <span class="k">host:</span> <span class="s">"0.0.0.0"</span>
+
+<span class="k">redis:</span>
+  <span class="k">url:</span> <span class="s">"${REDIS_URL}"</span>
+  <span class="k">onFailure:</span> <span class="s">"open"</span>      <span class="c"># open | closed</span>
+
+<span class="k">logging:</span>
+  <span class="k">level:</span> <span class="s">"info"</span>           <span class="c"># debug | info | warn | error</span>
+
+<span class="k">metrics:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">path:</span> <span class="s">"/metrics"</span>
+  <span class="k">defaultLabels:</span>
+    <span class="k">environment:</span> <span class="s">"production"</span>
+
+<span class="k">health:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">path:</span> <span class="s">"/health"</span>
+  <span class="k">backendPath:</span> <span class="s">"/health"</span>
+  <span class="k">timeoutMs:</span> <span class="n">2000</span>
+
+<span class="k">cors:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">origins:</span> [<span class="s">"https://app.example.com"</span>]
+  <span class="k">methods:</span> [<span class="t">GET</span>, <span class="t">POST</span>, <span class="t">PUT</span>, <span class="t">DELETE</span>, <span class="t">PATCH</span>, <span class="t">OPTIONS</span>]
+  <span class="k">allowedHeaders:</span> [<span class="t">Content-Type</span>, <span class="t">Authorization</span>]
+  <span class="k">exposedHeaders:</span> [<span class="t">X-Request-ID</span>]
+  <span class="k">credentials:</span> <span class="b">false</span>
+  <span class="k">maxAge:</span> <span class="n">86400</span>
+
+<span class="k">jwt:</span>
+  <span class="k">enabled:</span> <span class="b">true</span>
+  <span class="k">mode:</span> <span class="s">"jwks"</span>           <span class="c"># shared-secret | jwks</span>
+  <span class="k">issuers:</span>
+    - <span class="k">name:</span> <span class="s">"primary"</span>
+      <span class="k">jwksUri:</span> <span class="s">"https://auth.example.com/.well-known/jwks.json"</span>
+      <span class="k">issuer:</span> <span class="s">"https://auth.example.com"</span>
+      <span class="k">audience:</span> <span class="s">"my-api"</span>
+
+<span class="k">routes:</span>
+  - <span class="k">prefix:</span> <span class="s">"/api/protected"</span>
+    <span class="k">target:</span> <span class="s">"http://backend:3000"</span>
+    <span class="k">stripPrefix:</span> <span class="b">true</span>
+    <span class="k">backendName:</span> <span class="s">"backend"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">1000</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+    <span class="k">timeout:</span>
+      <span class="k">connect:</span> <span class="n">3000</span>
+      <span class="k">headers:</span> <span class="n">5000</span>
+      <span class="k">body:</span> <span class="n">30000</span>
+    <span class="k">circuitBreaker:</span>
+      <span class="k">enabled:</span> <span class="b">true</span>
+      <span class="k">errorThreshold:</span> <span class="n">50</span>
+      <span class="k">recoveryTimeMs:</span> <span class="n">30000</span>
+      <span class="k">halfOpenRequests:</span> <span class="n">3</span>
+      <span class="k">maxRetries:</span> <span class="n">3</span>
+      <span class="k">retryDelayMs:</span> <span class="n">100</span>
+      <span class="k">retryMaxDelayMs:</span> <span class="n">5000</span>
+    <span class="k">jwt:</span>
+      <span class="k">issuer:</span> <span class="s">"primary"</span>
+
+<span class="k">overrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/login"</span>
+    <span class="k">rateLimit:</span>
+      <span class="k">maxRequests:</span> <span class="n">5</span>
+      <span class="k">windowSeconds:</span> <span class="n">60</span>
+
+<span class="k">corsOverrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/auth/login"</span>
+    <span class="k">cors:</span>
+      <span class="k">origins:</span> [<span class="s">"*"</span>]
+
+<span class="k">jwtOverrides:</span>
+  - <span class="k">path:</span> <span class="s">"/api/public"</span>
+    <span class="k">jwt:</span>
+      <span class="k">enabled:</span> <span class="b">false</span></code></pre>
+
+  <h3>Señales operacionales</h3>
+  <table>
+    <thead>
+      <tr><th>Señal</th><th>Efecto</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>SIGHUP</code></td><td>Relee <code>gateway.yaml</code> y aplica cambios hot-reloadables</td></tr>
+      <tr><td><code>SIGTERM</code></td><td>Shutdown ordenado: cierra Fastify → cierra Undici pools → quit Redis</td></tr>
+      <tr><td><code>SIGINT</code></td><td>Igual que SIGTERM (Ctrl+C en consola)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Endpoints reservados</h3>
+  <table>
+    <thead>
+      <tr><th>Path</th><th>Tipo</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/metrics</code></td><td>Prometheus</td><td>Configurable vía <code>metrics.path</code></td></tr>
+      <tr><td><code>/health</code></td><td>JSON agregado</td><td>Configurable vía <code>health.path</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Métricas clave para alertas</h3>
+  <table>
+    <thead>
+      <tr><th>Alerta</th><th>Consulta</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Más del 5% de respuestas son 5xx</td>
+        <td><code>sum(rate(gateway_http_requests_total{status_code=~"5.."}[5m])) / sum(rate(gateway_http_requests_total[5m])) &gt; 0.05</code></td>
+      </tr>
+      <tr>
+        <td>Circuit abierto más de 2 min</td>
+        <td><code>changes(gateway_circuit_breaker_state[2m]) &gt; 0 and gateway_circuit_breaker_state == 2</code></td>
+      </tr>
+      <tr>
+        <td>Auth Service caído</td>
+        <td><code>rate(gateway_jwt_validations_total{result="service_unavailable"}[1m]) &gt; 0</code></td>
+      </tr>
+      <tr>
+        <td>Latencia p95 &gt; 2 s</td>
+        <td><code>histogram_quantile(0.95, rate(gateway_http_request_duration_seconds_bucket[5m])) &gt; 2</code></td>
+      </tr>
+      <tr>
+        <td>Health degradado</td>
+        <td><code>probe_success{job="gateway-health"} == 0</code> (si configuras blackbox exporter)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <footer class="appendix">
+    Gateway HTTP Modular · Manual de Usuario v1.0 · Julio 2026<br />
+    Documento generado sobre la base de código en la rama actual del repositorio.
+  </footer>
+</section>
+
+</body>
+</html>
