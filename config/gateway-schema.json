@@ -38,11 +38,25 @@
             }
           ],
           "default": "0.0.0.0"
+        },
+        "bodyLimit": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Tamaño máximo del body de un request, en bytes. Default 6 MiB. Cubre la subida de archivos binarios (multipart/form-data, application/octet-stream) a backends como catalog-service. NO hot-reloadable: vive en server.* y requiere reiniciar el gateway."
+            },
+            {
+              "$ref": "#/definitions/envVar"
+            }
+          ],
+          "default": 6291456
         }
       },
       "default": {
         "port": 3000,
-        "host": "0.0.0.0"
+        "host": "0.0.0.0",
+        "bodyLimit": 6291456
       }
     },
     "redis": {
