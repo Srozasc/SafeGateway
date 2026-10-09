@@ -9,6 +9,7 @@ import { registerErrorHandler } from './errors/handler.js';
 import { MetricsPlugin } from './middleware/metrics/plugin.js';
 import { ConnectionPoolManager } from './proxy/pool.js';
 import { createHealthHandler } from './middleware/health/index.js';
+import { registerRawBodyParsers } from './server/raw-body-parser.js';
 
 // Declarar el decorator en el tipo FastifyInstance
 declare module 'fastify' {
@@ -40,7 +41,15 @@ export function buildServer(
       level: logger.level || 'info',
     },
     disableRequestLogging: true, // Desactivar logs por defecto de Fastify para usar nuestro sistema customizado
+    // Tamaño máximo del body en bytes. Default 6 MiB (ver ServerConfigSchema).
+    // Cubre uploads binarios tipo multipart/form-data que irían a catalog-service.
+    bodyLimit: config.server.bodyLimit,
   });
+
+  // Registrar parsers raw-body para uploads binarios (multipart/form-data,
+  // application/octet-stream, etc.). El body queda como Buffer y se reenvía
+  // sin alterar al backend, preservando bytes para catalog-service.
+  registerRawBodyParsers(server, config.server.bodyLimit);
 
   // 1. Registrar manejador de errores y no encontrados globales
   registerErrorHandler(server);
@@ -112,18 +121,22 @@ export function buildServer(
     poolManager,
     logger,
     pipeline.getLifecycleHooks(),
-    pipeline
+    pipeline,
   );
 
   // 6. Registrar las rutas usando el preHandler del pipeline + proxy handler
   const sortedRoutes = [...finalSnapshotRef.current.config.routes].sort(
-    (a, b) => b.prefix.length - a.prefix.length
+    (a, b) => b.prefix.length - a.prefix.length,
   );
 
   for (const routeConfig of sortedRoutes) {
     logger.info(
-      { prefix: routeConfig.prefix, target: routeConfig.target, stripPrefix: routeConfig.stripPrefix },
-      `Registrando proxy para prefijo: ${routeConfig.prefix} -> ${routeConfig.target}`
+      {
+        prefix: routeConfig.prefix,
+        target: routeConfig.target,
+        stripPrefix: routeConfig.stripPrefix,
+      },
+      `Registrando proxy para prefijo: ${routeConfig.prefix} -> ${routeConfig.target}`,
     );
 
     // Append wildcard to match all subpaths under this prefix
@@ -143,6 +156,13 @@ export function buildServer(
   }
 
   // 7. Almacenar el poolManager para poder cerrarlo en shutdown
+  // SAFETY: `buildServer` no devuelve la instancia del `ConnectionPoolManager`
+  // porque vive como propiedad colgada del server para simplificar la API
+  // pública; el caller de `bootstrap()` no debería necesitar accederla
+  // directamente, pero `src/index.ts:bootstrap()` lo lee en el handler de
+  // SIGTERM para hacer `poolManager.close()`. La invariante que TS no puede
+  // verificar es: `server.poolManager` existe exactamente cuando esta función
+  // devolvió control (se asigna aquí antes del return).
   (server as unknown as { poolManager: typeof poolManager }).poolManager = poolManager;
 
   return server;
