@@ -7,6 +7,16 @@ import type { JwtAuthRegistry } from '../middleware/jwt-auth/registry.js';
 export interface ServerConfig {
   port: number;
   host: string;
+  /**
+   * Tamaño máximo del body de un request, en bytes. Default 6 MiB.
+   *
+   * NO es hot-reloadable: cambiar este valor requiere reiniciar el gateway
+   * (el `bodyLimit` se pasa al constructor de Fastify al levantar la instancia).
+   *
+   * Se aplica globalmente a todos los content-types y por defecto cubre
+   * subida de archivos binarios (multipart/form-data, application/octet-stream).
+   */
+  bodyLimit: number;
 }
 
 export interface RedisConfig {
@@ -169,4 +179,3 @@ export interface ReloadResult {
   ignored: string[];
   error?: string;
 }
-

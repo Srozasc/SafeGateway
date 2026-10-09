@@ -9,6 +9,14 @@ export const ServerConfigSchema = z.object({
     .max(65535, 'El puerto debe ser menor o igual a 65535')
     .default(3000),
   host: z.string().min(1, 'El host no puede estar vacío').default('0.0.0.0'),
+  // Tamaño máximo del body (en bytes). Cubre la subida de archivos binarios a
+  // backends como catalog-service. Default 6 MiB. NO hot-reloadable (vive
+  // en server.* y requiere reinicio).
+  bodyLimit: z
+    .number()
+    .int()
+    .positive('El bodyLimit debe ser un entero positivo en bytes')
+    .default(6 * 1024 * 1024),
 });
 
 // Esquema para Redis
@@ -45,11 +53,7 @@ export const RouteTimeoutConfigSchema = z.object({
     .int()
     .positive('El timeout de headers debe ser un entero positivo')
     .optional(),
-  body: z
-    .number()
-    .int()
-    .positive('El timeout de body debe ser un entero positivo')
-    .optional(),
+  body: z.number().int().positive('El timeout de body debe ser un entero positivo').optional(),
 });
 
 // Esquema para autenticación JWT (HS256/HS384/HS512 con secreto compartido)
@@ -105,11 +109,7 @@ export const JwtIssuerConfigSchema = z.object({
     .nonnegative('refreshCooldownSeconds debe ser un entero no negativo')
     .default(30),
   refreshOnMiss: z.boolean().default(true),
-  timeoutMs: z
-    .number()
-    .int()
-    .positive('timeoutMs debe ser un entero positivo')
-    .default(3000),
+  timeoutMs: z.number().int().positive('timeoutMs debe ser un entero positivo').default(3000),
 });
 
 // Esquema para la sección global `jwt` (modo JWKS + lista de issuers)
@@ -161,11 +161,7 @@ export const CircuitBreakerConfigSchema = z.object({
     .min(1, 'El threshold de error debe ser al menos 1')
     .max(100, 'El threshold de error debe ser como máximo 100')
     .default(50),
-  requestCount: z
-    .number()
-    .int()
-    .positive('El conteo de requests debe ser positivo')
-    .default(100),
+  requestCount: z.number().int().positive('El conteo de requests debe ser positivo').default(100),
   recoveryTimeMs: z
     .number()
     .int()
@@ -176,21 +172,9 @@ export const CircuitBreakerConfigSchema = z.object({
     .int()
     .positive('Las requests en half-open deben ser positivas')
     .default(3),
-  maxRetries: z
-    .number()
-    .int()
-    .nonnegative('Los reintentos no pueden ser negativos')
-    .default(3),
-  retryDelayMs: z
-    .number()
-    .int()
-    .positive('El delay base debe ser positivo')
-    .default(100),
-  retryMaxDelayMs: z
-    .number()
-    .int()
-    .positive('El delay máximo debe ser positivo')
-    .default(5000),
+  maxRetries: z.number().int().nonnegative('Los reintentos no pueden ser negativos').default(3),
+  retryDelayMs: z.number().int().positive('El delay base debe ser positivo').default(100),
+  retryMaxDelayMs: z.number().int().positive('El delay máximo debe ser positivo').default(5000),
 });
 
 // Esquema para CORS
@@ -288,10 +272,7 @@ export const MetricsConfigSchema = z
 export const HealthConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
-    path: z
-      .string()
-      .startsWith('/', 'El path de health debe comenzar con "/"')
-      .default('/health'),
+    path: z.string().startsWith('/', 'El path de health debe comenzar con "/"').default('/health'),
     backendPath: z
       .string()
       .startsWith('/', 'El backendPath de health debe comenzar con "/"')
@@ -311,7 +292,11 @@ export const HealthConfigSchema = z
 
 // Esquema principal de configuración del Gateway
 export const GatewayConfigSchema = z.object({
-  server: ServerConfigSchema.default({ port: 3000, host: '0.0.0.0' }),
+  server: ServerConfigSchema.default({
+    port: 3000,
+    host: '0.0.0.0',
+    bodyLimit: 6 * 1024 * 1024,
+  }),
   redis: RedisConfigSchema,
   logging: LoggingConfigSchema.default({ level: 'info' }),
   metrics: MetricsConfigSchema,

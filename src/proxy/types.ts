@@ -25,13 +25,40 @@ export interface ProxyTimeoutConfig {
   body?: number; // Timeout for receiving body (ms)
 }
 
+/**
+ * Type of body payloads the proxy engine can forward to backends.
+ *
+ * Includes:
+ *   - `string`: text bodies (e.g. pre-stringified JSON, raw text).
+ *   - `Buffer`: binary bodies accumulated from Fastify content-type parsers
+ *     (multipart/*, application/octet-stream, …) or small uploads.
+ *   - `AsyncIterable<unknown>`: streams (Node `Readable`, Web `ReadableStream`,
+ *     async generators) for true streaming passthrough.
+ *   - `null`: explicit "no body" (different from undefined, used by hooks).
+ *
+ * Use `buildRequestBody` in `engine.ts` to normalize an unknown body into one
+ * of these variants before forwarding to Undici.
+ */
+export type ProxyRequestBody = string | Buffer | AsyncIterable<unknown> | null;
+
 export interface ProxyRequestOptions {
   backend: string; // Full backend URL
   method: string; // Original HTTP method
   path: string; // Path without query string
   query?: string; // Query string
   headers: Record<string, string | string[] | undefined>;
-  body?: Buffer | null;
+  /**
+   * The request body that will be forwarded to the backend. Type is broader
+   * than `Buffer | null` from the original design: the gateway is a forward
+   * proxy and must handle binary uploads (Buffer), plain text, and streams
+   * without coercing them to JSON.
+   *
+   * NOTE: The engine currently does NOT pass `body` to lifecycle hooks via
+   * `onBeforeRequest` options (see T5 in odd/tasks/binary-upload-support.md).
+   * Plugins that need to inspect/modify the body receive it via the Fastify
+   * request object instead.
+   */
+  body?: ProxyRequestBody;
   timeout?: ProxyTimeoutConfig;
 }
 
@@ -51,19 +78,13 @@ export interface ProxyLifecycleHooks {
    * Hook executed BEFORE sending request to backend.
    * Allows modifying options or rejecting the request.
    */
-  onBeforeRequest?: (
-    options: ProxyRequestOptions,
-    context: ProxyContext
-  ) => void | Promise<void>;
+  onBeforeRequest?: (options: ProxyRequestOptions, context: ProxyContext) => void | Promise<void>;
 
   /**
    * Hook executed AFTER receiving headers from backend.
    * Allows inspecting or modifying response headers.
    */
-  onBeforeResponse?: (
-    response: ProxyResponseData,
-    context: ProxyContext
-  ) => void | Promise<void>;
+  onBeforeResponse?: (response: ProxyResponseData, context: ProxyContext) => void | Promise<void>;
 
   /**
    * Hook executed when an error occurs in the proxy.

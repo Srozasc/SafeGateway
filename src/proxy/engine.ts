@@ -4,13 +4,63 @@ import { Pool } from 'undici';
 import { Logger } from 'pino';
 import type { RouteMatch } from '../routing/types.js';
 import { ConnectionPoolManager } from './pool.js';
-import type { ProxyLifecycleHooks, ProxyContext, ProxyError, ProxyTimeoutConfig } from './types.js';
-import {
-  buildProxyContext,
-  createProxyError,
-  buildErrorResponse,
-} from './hooks.js';
+import type {
+  ProxyLifecycleHooks,
+  ProxyContext,
+  ProxyError,
+  ProxyRequestBody,
+  ProxyTimeoutConfig,
+} from './types.js';
+import { buildProxyContext, createProxyError, buildErrorResponse } from './hooks.js';
 import { buildForwardingHeaders } from './headers.js';
+
+/**
+ * Builds the request body for forwarding through Undici, preserving the
+ * original type instead of coercing binary payloads to JSON.
+ *
+ * Behavior:
+ *   - GET/HEAD always yield `undefined` regardless of input.
+ *   - `undefined` / `null` input yields `undefined`.
+ *   - `string` → returned as-is.
+ *   - `Buffer` → returned as-is (NOT JSON-stringified; this is the bug fix for
+ *     binary uploads to backends like catalog-service).
+ *   - Async iterables (streams) → returned as-is for streaming passthrough.
+ *   - Plain objects / arrays / other `unknown` → `JSON.stringify`. This is the
+ *     legacy fallback used for parsed JSON bodies coming from Fastify's default
+ *     `application/json` parser.
+ *
+ * Exported for unit testing; the rest of the engine uses this helper to keep
+ * the dispatch logic in a single place.
+ */
+export function buildRequestBody(requestBody: unknown, method: string): ProxyRequestBody {
+  if (method === 'GET' || method === 'HEAD') {
+    return null;
+  }
+  if (requestBody === undefined || requestBody === null) {
+    return null;
+  }
+
+  if (typeof requestBody === 'string') {
+    return requestBody;
+  }
+  if (Buffer.isBuffer(requestBody)) {
+    return requestBody;
+  }
+
+  if (
+    typeof requestBody === 'object' &&
+    requestBody !== null &&
+    (Symbol.asyncIterator in (requestBody as object) ||
+      typeof (requestBody as { getReader?: () => unknown }).getReader === 'function')
+  ) {
+    return requestBody as AsyncIterable<unknown>;
+  }
+
+  // Fallback for parsed JSON objects (the Fastify default JSON parser produces
+  // these). Preserves the legacy behavior where `request.body === { foo: 'bar' }`
+  // gets forwarded as the string `'{"foo":"bar"}'`.
+  return JSON.stringify(requestBody);
+}
 
 /**
  * Core proxy engine that forwards requests to backends using undici.
@@ -26,11 +76,7 @@ export class ProxyEngine {
     body: 60000,
   };
 
-  constructor(
-    poolManager: ConnectionPoolManager,
-    hooks: ProxyLifecycleHooks,
-    logger: Logger
-  ) {
+  constructor(poolManager: ConnectionPoolManager, hooks: ProxyLifecycleHooks, logger: Logger) {
     this.poolManager = poolManager;
     this.hooks = hooks;
     this.logger = logger;
@@ -43,7 +89,7 @@ export class ProxyEngine {
   async forward(
     request: FastifyRequest,
     reply: FastifyReply,
-    routeMatch: RouteMatch
+    routeMatch: RouteMatch,
   ): Promise<void> {
     const context = buildProxyContext(request, routeMatch);
     const { route } = routeMatch;
@@ -74,8 +120,12 @@ export class ProxyEngine {
 
     // Build proxy headers
     const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(request.headers as Record<string, string | string[] | undefined>)) {
-      if (value === undefined || key.toLowerCase() === 'host') {continue;}
+    for (const [key, value] of Object.entries(
+      request.headers as Record<string, string | string[] | undefined>,
+    )) {
+      if (value === undefined || key.toLowerCase() === 'host') {
+        continue;
+      }
       headers[key] = Array.isArray(value) ? value.join(', ') : value;
     }
 
@@ -98,13 +148,10 @@ export class ProxyEngine {
             headers,
             timeout,
           },
-          context
+          context,
         );
       } catch (error) {
-        this.logger.error(
-          { error, backend, path: targetPath },
-          'onBeforeRequest hook failed'
-        );
+        this.logger.error({ error, backend, path: targetPath }, 'onBeforeRequest hook failed');
       }
     }
 
@@ -116,12 +163,16 @@ export class ProxyEngine {
 
     // Execute the request
     try {
-      const response = await this.executeRequest(pool, {
-        method: request.method,
-        path: requestPath,
-        headers,
-        timeout,
-      }, request.body);
+      const response = await this.executeRequest(
+        pool,
+        {
+          method: request.method,
+          path: requestPath,
+          headers,
+          timeout,
+        },
+        request.body,
+      );
 
       // Call onBeforeResponse hook
       if (this.hooks.onBeforeResponse) {
@@ -132,7 +183,7 @@ export class ProxyEngine {
               headers: response.headers as Record<string, string | string[]>,
               backend,
             },
-            context
+            context,
           );
         } catch (error) {
           this.logger.error({ error, backend }, 'onBeforeResponse hook failed');
@@ -158,47 +209,68 @@ export class ProxyEngine {
       headers: Record<string, string>;
       timeout: { connect?: number; headers?: number; body?: number };
     },
-    requestBody?: unknown
-  ): Promise<{ statusCode: number; headers: Record<string, string | string[]>; body: Buffer | string | null }> {
+    requestBody?: unknown,
+  ): Promise<{
+    statusCode: number;
+    headers: Record<string, string | string[]>;
+    body: Buffer | string | null;
+  }> {
     const maxTimeout = Math.max(
       options.timeout.connect ?? 5000,
       options.timeout.headers ?? 30000,
-      options.timeout.body ?? 60000
+      options.timeout.body ?? 60000,
     );
 
-    // Include body if present and this is not a GET/HEAD request
-    const isBodyRequest = requestBody !== undefined && !['GET', 'HEAD'].includes(options.method);
-    const bodyStr = isBodyRequest
-      ? (typeof requestBody === 'string' ? requestBody : JSON.stringify(requestBody))
-      : undefined;
+    // Pick the right body representation for Undici: Buffer for binary,
+    // string for text, AsyncIterable for streams, or fall back to JSON.stringify
+    // for parsed JSON objects from Fastify's default parser. Never coerce
+    // blindly — this was the cause of binary-upload corruption.
+    const body = buildRequestBody(requestBody, options.method);
 
-    return pool.request({
-      method: options.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD',
-      path: options.path,
-      headers: options.headers,
-      bodyTimeout: maxTimeout,
-      headersTimeout: maxTimeout,
-      ...(bodyStr !== undefined ? { body: bodyStr } : {}),
-    }).then(async ({ statusCode, headers, body }) => {
-      // Collect body into buffer
-      const chunks: Buffer[] = [];
-      if (body) {
-        // Use for...of instead of for await...of for compatibility
-        for await (const chunk of (body as AsyncIterable<Buffer | string>)) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return pool
+      .request({
+        method: options.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD',
+        path: options.path,
+        headers: options.headers,
+        bodyTimeout: maxTimeout,
+        headersTimeout: maxTimeout,
+        // Type bridge at the engine boundary: undici 6.26.0 exposes
+        // `RequestOptions.body` as a strict union (string | Buffer | Uint8Array
+        // | Readable | FormData | null) but at runtime the dispatcher also
+        // accepts AsyncIterable / Node Readable streams. `ProxyRequestBody` is
+        // the broader union (includes streams); the cast here keeps TypeScript
+        // happy without changing runtime behavior. Narrow this when streaming
+        // support is added.
+        ...(body !== undefined ? { body: body as never } : {}),
+      })
+      .then(async ({ statusCode, headers, body }) => {
+        // Collect body into buffer
+        const chunks: Buffer[] = [];
+        if (body) {
+          // Use for...of instead of for await...of for compatibility
+          for await (const chunk of body as AsyncIterable<Buffer | string>) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
         }
-      }
-      const bodyBuffer = chunks.length > 0 ? Buffer.concat(chunks) : null;
-      return { statusCode, headers: headers as Record<string, string | string[]>, body: bodyBuffer };
-    });
+        const bodyBuffer = chunks.length > 0 ? Buffer.concat(chunks) : null;
+        return {
+          statusCode,
+          headers: headers as Record<string, string | string[]>,
+          body: bodyBuffer,
+        };
+      });
   }
 
   /**
    * Sends the backend response to the client.
    */
   private async sendResponse(
-    response: { statusCode: number; headers: Record<string, string | string[]>; body: Buffer | string | null },
-    reply: FastifyReply
+    response: {
+      statusCode: number;
+      headers: Record<string, string | string[]>;
+      body: Buffer | string | null;
+    },
+    reply: FastifyReply,
   ): Promise<void> {
     const { statusCode, headers, body } = response;
 
@@ -231,7 +303,7 @@ export class ProxyEngine {
   private async handleError(
     error: ProxyError,
     reply: FastifyReply,
-    context: ProxyContext
+    context: ProxyContext,
   ): Promise<void> {
     // Call onError hook
     if (this.hooks.onError) {
@@ -244,14 +316,14 @@ export class ProxyEngine {
 
     this.logger.error(
       { code: error.code, message: error.message, backend: error.backend },
-      'Proxy request failed'
+      'Proxy request failed',
     );
 
     buildErrorResponse(
       reply,
       error.statusCode ?? 502,
       this.getErrorName(error.code),
-      error.message
+      error.message,
     );
   }
 

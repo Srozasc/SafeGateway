@@ -167,7 +167,7 @@ tests/
 Primary config: `config/gateway.yaml` (path overridable via `CONFIG_PATH` env var). Schema in `src/config/schema.ts` (Zod). Environment interpolation: `${VAR_NAME}` supported in any scalar; missing required vars throw `MissingEnvVarError` and abort startup.
 
 ### Top-level keys
-- `server`: `{ port, host }` — bind config (restart required to change)
+- `server`: `{ port, host, bodyLimit }` — bind config (restart required to change). `bodyLimit` default `6 MiB`; controla el tamaño máximo de body aceptado por Fastify, esencial para uploads binarios (multipart/form-data, application/octet-stream) hacia backends como catalog-service.
 - `redis`: `{ url, onFailure: "open" | "closed" }` — rate-limit store (restart required)
 - `logging`: `{ level }` — hot-reloadable
 - `metrics`: `{ enabled, path?, defaultLabels? }` — Prometheus endpoint config
