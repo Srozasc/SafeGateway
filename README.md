@@ -15,6 +15,7 @@ Un API Gateway robusto, modular, configurable e inmutable desarrollado en **Type
 * **Registro de Logs Estructurados**: Integración nativa de **Pino** con serializadores de peticiones, respuestas y errores redactando automáticamente información sensible (tokens `Authorization`, cookies, etc.).
 * **Arquitectura de Plugins con Hooks de Ciclo de Vida**: Pipeline extensible con hooks `onBeforeRequest`, `onBeforeResponse` y `onError` (en `ProxyLifecycleHooks`) más los hooks de alto nivel `onRequest` y `onResponse` por plugin (`GatewayPlugin`). Ejecución secuencial con capacidad de cortocircuito (*short-circuit*).
 * **Endpoint de Health Aggregation**: `GET /health` que consulta en paralelo el endpoint de salud de cada servicio downstream declarado en `routes[]` y devuelve un estado agregado (`ok` / `degraded` / `down`) con código HTTP apropiado. Ideal para load balancers, Kubernetes readiness probes y herramientas de monitoreo. No requiere autenticación, no consume rate-limit y se excluye de las métricas HTTP para no contaminar la observabilidad del tráfico real.
+* **Soporte de Uploads Binarios (multipart / octet-stream)**: Parsers de content-type registrados para `multipart/form-data`, `multipart/mixed`, `application/octet-stream` y `application/x-www-form-urlencoded`. El gateway actúa como forwarder transparente: el body se acumula como `Buffer` y se reenvía al backend sin parsear su estructura ni aplicar `JSON.stringify` sobre bytes binarios. El tamaño máximo aceptado se controla con `server.bodyLimit` (default 6 MiB); cuando se excede, Fastify responde HTTP 413 antes de alcanzar el pipeline. Esto desbloquea flujos de subida de archivos hacia servicios como `catalog-service` (fotos de producto, documentos, etc.) preservando los bytes intactos.
 * **Despliegue Contenerizado**: Optimizado mediante una compilación Docker *multi-stage* ultra-ligera (basada en `node:20-alpine`) e instrumentado con chequeos de salud (`HEALTHCHECK`) nativos de red.
 
 ---
@@ -113,8 +114,12 @@ El archivo de configuración principal se valida estrictamente con **Zod** al ar
 # Configuración del Servidor Fastify Core
 # ===============================================================
 server:
-  port: 3000       # Puerto TCP en el que escuchará el Gateway (Por defecto: 3000)
-  host: 0.0.0.0    # Host en el que escuchará (0.0.0.0 acepta tráfico externo)
+  port: 3000            # Puerto TCP en el que escuchará el Gateway (Por defecto: 3000)
+  host: 0.0.0.0         # Host en el que escuchará (0.0.0.0 acepta tráfico externo)
+  bodyLimit: 6291456    # Tamaño máximo del body aceptado, en bytes (Por defecto: 6 MiB).
+                        # Cubre la subida de archivos binarios (multipart/form-data,
+                        # application/octet-stream) a backends como catalog-service.
+                        # NO es hot-reloadable: requiere reiniciar el gateway.
 
 # ===============================================================
 # Configuración de Conexión a Redis
@@ -872,6 +877,7 @@ Para mantener la estabilidad de la red y el sistema, los campos se clasifican en
 #### ⚠️ Campos Estáticos (Ignorados de forma segura con un `warn`)
 Cualquier cambio en las siguientes secciones estructurales no bloqueará la recarga de los campos aplicables, pero no surtirá efecto y emitirá una advertencia (`warn`) en los logs auditados indicando que **requieren un reinicio completo del Gateway**:
 * **`server.port` / `server.host`**: Requieren re-bind del socket TCP.
+* **`server.bodyLimit`**: Se pasa al constructor de Fastify al levantar la instancia del servidor. Modificarlo en caliente podría romper la invariante del límite para requests en vuelo, por lo que se ignora de forma segura y requiere reinicio para tomar efecto.
 * **`redis.url` / `redis.onFailure`**: Requieren reconectar o reconstruir la inicialización del plugin.
 * **`routes[].prefix` / `routes[].target` / `routes[].stripPrefix` / `routes[].timeout`**: Están inyectados en la inicialización estática del proxy inverso (motor `Undici`).
 * **Agregar o eliminar rutas**: No se pueden desregistrar plugins dinámicamente en Fastify.
